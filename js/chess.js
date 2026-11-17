@@ -46,7 +46,7 @@ var Chess = (function () {
 
   // ---------- Setup ----------
   function setup(root) {
-    var cfg = UI.store('chess_cfg') || { mode: 'ai', level: 1, color: 'w' };
+    var cfg = UI.store('chess_cfg2') || { mode: 'ai', level: 1, color: 'r' };
     var saved = UI.store('chess_game');
     root.appendChild(UI.topbar('Chess', '#/'));
     var noteEl = h('p', { class: 'levelnote' });
@@ -54,13 +54,13 @@ var Chess = (function () {
     var levelPanel = h('div', { class: 'panel' }, [h('h3', { text: 'Level' }),
       UI.seg(LEVELS, cfg.level, function (v) { cfg.level = v; setNote(); }), noteEl]);
     var colorPanel = h('div', { class: 'panel' }, [h('h3', { text: 'You play' }),
-      UI.seg([{ value: 'w', label: 'White' }, { value: 'b', label: 'Black' }, { value: 'r', label: 'Random' }], cfg.color,
+      UI.seg([{ value: 'r', label: 'Random' }, { value: 'w', label: 'White' }, { value: 'b', label: 'Black' }], cfg.color,
         function (v) { cfg.color = v; })]);
     root.appendChild(levelPanel);
     root.appendChild(colorPanel);
     setNote();
     root.appendChild(h('button', { class: 'bigbtn chess', text: 'Start game', onclick: function () {
-      UI.store('chess_cfg', cfg);
+      UI.store('chess_cfg2', cfg);
       var human = cfg.color === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : cfg.color;
       UI.store('chess_game', { mode: 'ai', level: cfg.level, human: human, moves: [] });
       location.hash = '#/chess/play';
