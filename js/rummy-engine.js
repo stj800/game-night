@@ -194,6 +194,7 @@ var RummyEngine = (function () {
     var rows = s.players.map(function (p, i) { var hp = handPoints(p.hand); return { i: i, table: p.table, hand: hp, net: p.table - hp }; });
     rows.forEach(function (r) { s.players[r.i].score += r.net; });
     s.result = { how: how, by: s.turn, rows: rows };
+    if (how === 'out') (s.outs = s.outs || []).push(s.turn);
     s.history.push(rows.map(function (r) { return r.net; }));
     var sd = sides(s), top = -Infinity, winners = [];
     sd.forEach(function (x, k) { if (x.score >= s.target) { if (x.score > top) { top = x.score; winners = [k]; } else if (x.score === top) winners.push(k); } });

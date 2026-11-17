@@ -23,10 +23,10 @@ var Rummy = (function () {
   function save() {
     if (!D) return;
     if (D.mode === 'local') UI.store('rum_game', D.s);
-    else UI.store('rum_net', { s: D.s, code: N.code, seats: D.seats.map(function (st) { return { name: st.name, kind: st.kind }; }) });
+    else UI.store('rum_net', { s: D.s, code: N.code, seats: D.seats.map(function (st) { return { name: st.name, kind: st.kind, pid: st.pid || null }; }) });
   }
   function seatInfo() {
-    return D.seats.map(function (st) { return { name: st.name, kind: st.kind, on: st.kind !== 'remote' || !!(st.conn && st.conn.open) }; });
+    return D.seats.map(function (st) { return { name: st.name, kind: st.kind, pid: st.pid || null, on: st.kind !== 'remote' || !!(st.conn && st.conn.open) }; });
   }
   function viewFor(i) {
     var v = JSON.parse(JSON.stringify(D.s));
@@ -134,7 +134,7 @@ var Rummy = (function () {
   function fillOrder(n, teams) { return teams ? [2, 1, 3] : [1, 2, 3].slice(0, n - 1); }
   function hostLobby(name) {
     closeNet();
-    var cfg = cfgGet(), n = seatCount(cfg.mode), seats = [{ name: name, kind: 'me' }];
+    var cfg = cfgGet(), n = seatCount(cfg.mode), seats = [{ name: name, kind: 'me', pid: myPid() }];
     for (var i = 1; i < n; i++) seats.push({ name: '', kind: 'open' });
     N.role = 'host'; N.code = newCode(); N.lobby = { cfg: cfg, seats: seats }; N.status = 'Opening a table...';
     openHost(false);
@@ -143,7 +143,7 @@ var Rummy = (function () {
     var saved = UI.store('rum_net'); if (!saved) return false;
     closeNet();
     N.role = 'host'; N.code = saved.code; N.status = 'Reopening your table...';
-    var seats = saved.seats.map(function (st) { return { name: st.name, kind: st.kind, conn: null, awayAt: Date.now() }; });
+    var seats = saved.seats.map(function (st) { return { name: st.name, kind: st.kind, pid: st.pid || null, conn: null, awayAt: Date.now() }; });
     newDriver(saved.s, seats, 'host'); D.msg = 'Welcome back. Waiting for players to reconnect.';
     openHost(true);
     return true;
@@ -179,24 +179,25 @@ var Rummy = (function () {
   function hostRecv(conn, d) {
     if (!d || typeof d !== 'object') return;
     if (d.t === 'hello') {
-      var nm = cleanName(d.name), i;
+      var nm = cleanName(d.name), pid = String(d.pid || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 16) || null, i;
       if (D && D.mode === 'host') {
         var seats = D.seats, low = nm.toLowerCase();
-        i = seats.findIndex(function (st) { return st.kind === 'remote' && st.name.toLowerCase() === low; });
+        i = pid ? seats.findIndex(function (st) { return st.kind === 'remote' && st.pid === pid; }) : -1;
+        if (i < 0) i = seats.findIndex(function (st) { return st.kind === 'remote' && st.name.toLowerCase() === low; });
         if (i < 0) i = seats.findIndex(function (st) { return st.kind === 'bot'; }); // take over a computer seat
         if (i < 0) { send(conn, { t: 'full' }); return; }
         var back = seats[i].kind === 'remote';
         if (seats[i].conn && seats[i].conn !== conn) { try { seats[i].conn.close(); } catch (e) {} }
-        seats[i].kind = 'remote'; seats[i].conn = conn; seats[i].name = nm; D.s.players[i].name = nm; conn.seat = i;
+        seats[i].kind = 'remote'; seats[i].conn = conn; seats[i].name = nm; seats[i].pid = pid; D.s.players[i].name = nm; conn.seat = i;
         D.msg = nm + (back ? ' is back.' : ' joined and took over a computer seat.'); save(); publish(); runBots();
         return;
       }
       if (N.lobby) {
         var L = N.lobby;
-        i = L.seats.findIndex(function (st) { return st.kind === 'remote' && st.name.toLowerCase() === nm.toLowerCase(); });
+        i = L.seats.findIndex(function (st) { return st.kind === 'remote' && ((pid && st.pid === pid) || st.name.toLowerCase() === nm.toLowerCase()); });
         if (i < 0) i = fillOrder(L.seats.length, L.cfg.mode === 'team').filter(function (k) { return L.seats[k] && L.seats[k].kind === 'open'; })[0];
         if (i === undefined || i < 0) { send(conn, { t: 'full' }); return; }
-        L.seats[i] = { name: nm, kind: 'remote', conn: conn }; conn.seat = i;
+        L.seats[i] = { name: nm, kind: 'remote', conn: conn, pid: pid }; conn.seat = i;
         lobbyBroadcast();
       }
     } else if (d.t === 'act') {
@@ -221,7 +222,7 @@ var Rummy = (function () {
     var L = N.lobby; if (!L) return;
     var used = {}; L.seats.forEach(function (st) { if (st.name) used[st.name.toLowerCase()] = 1; });
     var seats = L.seats.map(function (st, i) {
-      if (st.kind !== 'open') return { name: st.name, kind: st.kind, conn: st.conn || null };
+      if (st.kind !== 'open') return { name: st.name, kind: st.kind, conn: st.conn || null, pid: st.pid || null };
       var nm = BOTS[i - 1]; if (used[nm.toLowerCase()]) nm = nm + ' (cpu)';
       return { name: nm, kind: 'bot', conn: null };
     });
@@ -253,7 +254,7 @@ var Rummy = (function () {
   function connect() {
     if (N.role !== 'client' || !N.peer) return;
     var c = N.peer.connect(PREFIX + N.code, { reliable: true }); N.conn = c;
-    c.on('open', function () { N.status = ''; send(c, { t: 'hello', name: N.name }); refresh(); });
+    c.on('open', function () { N.status = ''; send(c, { t: 'hello', name: N.name, pid: myPid() }); refresh(); });
     c.on('data', clientRecv);
     c.on('close', function () {
       if (N.role !== 'client' || N.conn !== c) return;
@@ -278,6 +279,130 @@ var Rummy = (function () {
     if (N.role === 'client' && !(N.conn && N.conn.open)) setTimeout(connect, 800);
   });
 
+  // =================== Records (saved on each phone, never cleared unless you reset) ===================
+  function myPid() {
+    var p = UI.store('rum_pid');
+    if (!p) { p = ''; for (var i = 0; i < 12; i++) p += 'abcdefghijkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 32)]; UI.store('rum_pid', p); }
+    return p;
+  }
+  function personKey(p) { return p.pid ? 'id:' + p.pid : 'name:' + String(p.n).toLowerCase(); }
+  function recordGame(s, mySeat, info, online) {
+    var log = UI.store('rum_log') || [];
+    for (var k = 0; k < log.length; k++) if (log[k].gid === s.gid) return log[k];
+    var my = s.players[mySeat], sd = E.sides(s), mine = sd[my.team].score, best = -Infinity;
+    sd.forEach(function (x, i) { if (i !== my.team && x.score > best) best = x.score; });
+    var bestHand = -Infinity; (s.history || []).forEach(function (row) { if (row[mySeat] > bestHand) bestHand = row[mySeat]; });
+    var e = { gid: s.gid, t: Date.now(), online: !!online, teams: !!s.teams, target: s.target, hands: s.round, won: s.winner === my.team,
+      seat: mySeat, myTeam: my.team, score: my.score, side: mine, margin: mine - best, bestHand: bestHand === -Infinity ? 0 : bestHand,
+      outs: (s.outs || []).filter(function (x) { return x === mySeat; }).length,
+      players: s.players.map(function (p, i) {
+        var inf = info ? info[i] : null;
+        return { n: p.name, pid: i === mySeat ? myPid() : inf ? inf.pid || null : null, bot: inf ? inf.kind === 'bot' : i !== mySeat, sc: p.score, tm: p.team };
+      }) };
+    log.unshift(e); if (log.length > 500) log.length = 500;
+    UI.store('rum_log', log);
+    return e;
+  }
+  function stats() {
+    var log = (UI.store('rum_log') || []).slice().reverse(), old = UI.store('rum_wins') || { w: 0, l: 0 };
+    var st = { games: 0, w: 0, l: 0, cpu: { w: old.w || 0, l: old.l || 0 }, net: { w: 0, l: 0 }, team: { w: 0, l: 0 }, solo: { w: 0, l: 0 },
+      hi: null, margin: null, hand: null, fast: null, streak: 0, best: 0, cur: 0, outs: 0, pts: 0, handsPlayed: 0, people: {}, byTarget: {}, log: log };
+    st.w = st.cpu.w; st.l = st.cpu.l; st.games = st.w + st.l;
+    log.forEach(function (g) {
+      st.games++; if (g.won) st.w++; else st.l++;
+      var humans = g.players.some(function (p, i) { return i !== g.seat && !p.bot; });
+      var b = humans ? st.net : st.cpu; if (g.won) b.w++; else b.l++;
+      b = g.teams ? st.team : st.solo; if (g.won) b.w++; else b.l++;
+      st.pts += g.score; st.handsPlayed += g.hands; st.outs += g.outs || 0;
+      if (!st.hi || g.score > st.hi.v) st.hi = { v: g.score, g: g };
+      if (g.won && (!st.margin || g.margin > st.margin.v)) st.margin = { v: g.margin, g: g };
+      if (!st.hand || g.bestHand > st.hand.v) st.hand = { v: g.bestHand, g: g };
+      if (g.won && (!st.fast || g.hands < st.fast.v)) st.fast = { v: g.hands, g: g };
+      var bt = st.byTarget[g.target] = st.byTarget[g.target] || { w: 0, l: 0, hi: null };
+      if (g.won) bt.w++; else bt.l++; if (bt.hi === null || g.score > bt.hi) bt.hi = g.score;
+      if (g.won) { st.cur = st.cur > 0 ? st.cur + 1 : 1; } else { st.cur = st.cur < 0 ? st.cur - 1 : -1; }
+      if (st.cur > st.best) st.best = st.cur;
+      var me = g.players[g.seat];
+      g.players.forEach(function (p, i) {
+        if (i === g.seat || p.bot) return;
+        var key = personKey(p), x = st.people[key] = st.people[key] || { n: p.n, vsW: 0, vsL: 0, wW: 0, wL: 0, games: 0 };
+        x.n = p.n; x.games++;
+        if (g.teams && p.tm === g.myTeam) { if (g.won) x.wW++; else x.wL++; }
+        else if (g.teams) { if (g.won) x.vsW++; else x.vsL++; }
+        else if (me.sc > p.sc) x.vsW++; else if (me.sc < p.sc) x.vsL++;
+      });
+    });
+    return st;
+  }
+  function pct(w, l) { return w + l ? Math.round(100 * w / (w + l)) + '%' : '-'; }
+  function when(t) { var d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + '/' + String(d.getFullYear()).slice(2); }
+
+  function handHistory(s, mySeat) {
+    var hist = s.history || [];
+    if (!hist.length) return h('p', { class: 'levelnote', text: 'Hand-by-hand scores show up here after the first hand.' });
+    var t = h('table', { class: 'rumtbl rumhist' }), cols;
+    if (s.teams) {
+      var sd = E.sides(s);
+      cols = sd.map(function (x, k) { return { label: k === s.players[mySeat].team ? 'Us' : 'Them', seats: x.members }; });
+    } else cols = s.players.map(function (p, i) { return { label: i === mySeat ? 'You' : p.name, seats: [i] }; });
+    t.appendChild(h('tr', null, [h('th', { text: 'Hand' })].concat(cols.map(function (c) { return h('th', { text: c.label }); }))));
+    var run = cols.map(function () { return 0; });
+    hist.forEach(function (row, r) {
+      t.appendChild(h('tr', null, [h('td', { text: String(r + 1) })].concat(cols.map(function (c, k) {
+        var v = 0; c.seats.forEach(function (i) { v += row[i]; }); run[k] += v;
+        return h('td', { html: (v >= 0 ? '+' : '') + v + '<small>' + run[k] + '</small>' });
+      }))));
+    });
+    return h('div', null, [h('h3', { class: 'rumsub', text: 'Hand by hand' }), t]);
+  }
+
+  function statsScreen(root) {
+    root.appendChild(UI.topbar('My Rummy record', '#/rummy'));
+    var st = stats();
+    if (!st.games) {
+      root.appendChild(h('div', { class: 'panel' }, [h('p', { class: 'levelnote', style: 'margin:0', text: 'No finished games yet. Every game you finish on this phone, against the computer or online, is saved here for good.' })]));
+      return;
+    }
+    function tile(big, small) { return h('div', { class: 'rumtile' }, [h('b', { text: big }), h('span', { text: small })]); }
+    root.appendChild(h('div', { class: 'rumtiles' }, [tile(String(st.games), 'games'), tile(String(st.w), 'wins'), tile(String(st.l), 'losses'), tile(pct(st.w, st.l), 'win rate')]));
+    function rec(label, b) { return h('div', { class: 'rumrow' }, [h('span', { text: label }), h('b', { text: b.w + b.l ? b.w + '-' + b.l + ' \u00B7 ' + pct(b.w, b.l) : '-' })]); }
+    root.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Win rate' }), rec('Against the computer', st.cpu), rec('Online with family', st.net), rec('Teams 2v2', st.team), rec('Free-for-all', st.solo)].concat(
+      Object.keys(st.byTarget).sort(function (a, b) { return a - b; }).map(function (k) { var b = st.byTarget[k]; return h('div', { class: 'rumrow' }, [h('span', { text: 'Games to ' + k }), h('b', { text: b.w + '-' + b.l + ' \u00B7 high ' + b.hi })]); }))));
+    function rr(label, v, extra) { return h('div', { class: 'rumrow' }, [h('span', { text: label }), h('b', { text: v === null || v === undefined ? '-' : v + (extra || '') })]); }
+    root.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'All-time records' }),
+      rr('Highest final score', st.hi && st.hi.v, st.hi ? ' (' + when(st.hi.g.t) + ')' : ''),
+      rr('Biggest win', st.margin && st.margin.v, st.margin ? ' points (' + when(st.margin.g.t) + ')' : ''),
+      rr('Best single hand', st.hand && st.hand.v, st.hand ? ' points' : ''),
+      rr('Fastest win', st.fast && st.fast.v, st.fast ? (st.fast.v === 1 ? ' hand' : ' hands') : ''),
+      rr('Longest win streak', st.best, st.best === 1 ? ' game' : ' games'),
+      rr('Current streak', st.cur > 0 ? st.cur + ' win' + (st.cur > 1 ? 's' : '') : st.cur < 0 ? -st.cur + ' loss' + (st.cur < -1 ? 'es' : '') : '-'),
+      rr('Times you went out', st.outs),
+      rr('Hands played', st.handsPlayed || null),
+      rr('Total points, all time', st.pts)]));
+    var ppl = Object.keys(st.people).map(function (k) { return st.people[k]; }).sort(function (a, b) { return b.games - a.games; });
+    if (ppl.length) {
+      root.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Head to head' })].concat(ppl.map(function (x) {
+        var parts = [];
+        if (x.vsW + x.vsL) parts.push('vs: you ' + x.vsW + ', ' + x.n + ' ' + x.vsL);
+        if (x.wW + x.wL) parts.push('as partners: ' + x.wW + '-' + x.wL);
+        return h('div', { class: 'rumrow' }, [h('span', { text: x.n }), h('b', { text: parts.join(' \u00B7 ') || x.games + ' games' })]);
+      }))));
+    }
+    var recent = st.log.slice().reverse().slice(0, 25);
+    if (recent.length) {
+      root.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Recent games' })].concat(recent.map(function (g) {
+        var who = g.players.map(function (p, i) { return (i === g.seat ? 'You' : p.n) + ' ' + p.sc; }).join(', ');
+        return h('div', { class: 'rumgame' + (g.won ? ' won' : '') }, [
+          h('b', { text: (g.won ? 'Won' : 'Lost') + ' \u00B7 ' + when(g.t) + ' \u00B7 to ' + g.target + (g.online ? ' \u00B7 online' : '') + (g.teams ? ' \u00B7 teams' : '') }),
+          h('span', { text: who + ' (' + g.hands + ' hands)' })]);
+      }))));
+    }
+    root.appendChild(h('button', { class: 'ghostbtn', text: 'Reset my record', onclick: function () {
+      UI.modal({ title: 'Erase your record?', text: 'This wipes every saved Rummy game and record on this phone. It cannot be undone.',
+        buttons: [{ label: 'Keep my record', cls: 'rummy' }, { label: 'Erase it', fn: function () { UI.store('rum_log', null); UI.store('rum_wins', null); location.reload(); } }] });
+    } }));
+  }
+
   // =================== Screens ===================
   function setup(root) {
     var cfg = cfgGet();
@@ -290,6 +415,8 @@ var Rummy = (function () {
       root.appendChild(h('button', { class: 'bigbtn rummy', text: 'Continue game (' + sideName(saved, 0, 0) + ' ' + sd[0].score + ', hand ' + saved.round + ')',
         onclick: function () { location.hash = '#/rummy/play'; } }));
     }
+    var stq = stats();
+    root.appendChild(h('button', { class: 'pill rumrecbtn', text: String.fromCodePoint(0x1F3C6) + ' My record' + (stq.games ? ': ' + stq.w + '-' + stq.l + ' (' + pct(stq.w, stq.l) + ')' : ''), onclick: function () { location.hash = '#/rummy/stats'; } }));
     var noteEl = h('p', { class: 'levelnote' }), dealNote = h('p', { class: 'levelnote' });
     function setDeal() {
       var n = seatCount(cfg.mode), std = n === 2 ? 13 : 7, d = cfg.deal ? Math.min(cfg.deal, n === 2 ? 13 : n === 3 ? 10 : 7) : std;
@@ -311,7 +438,7 @@ var Rummy = (function () {
     function setNote() { noteEl.textContent = LEVELS[cfg.level - 1].note; }
     root.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Computer level' }), UI.seg(LEVELS, cfg.level, function (v) { cfg.level = v; setNote(); keep(); }), noteEl]));
     setNote(); setDeal();
-    root.appendChild(h('button', { class: 'bigbtn rummy', text: 'Play on this phone', onclick: function () {
+    root.appendChild(h('button', { class: 'bigbtn rummy', text: 'Play against the computer', onclick: function () {
       keep();
       var teams = cfg.mode === 'team', n = seatCount(cfg.mode), names = ['You'];
       for (var i = 1; i < n; i++) names.push(BOTS[i - 1]);
@@ -639,7 +766,8 @@ var Rummy = (function () {
     }
     function scoreSheet() {
       var s = S();
-      UI.modal({ title: 'Scores \u00B7 Hand ' + s.round, body: scoreTable(), text: 'Playing to ' + s.target + '.', buttons: [{ label: 'Back to the game', cls: 'rummy' }] });
+      var body = h('div', null, [scoreTable(), handHistory(s, seat())]);
+      UI.modal({ title: 'Scores \u00B7 Hand ' + s.round, body: body, text: 'Playing to ' + s.target + '.', buttons: [{ label: 'Back to the game', cls: 'rummy' }] });
     }
     function roundOver() {
       if (!document.body.contains(scene)) return;
@@ -648,15 +776,22 @@ var Rummy = (function () {
       if (s.phase === 'gameover') {
         var mine = s.winner === me().team;
         if (mine) { UI.confetti(); Sound.play('win'); } else Sound.play('lose');
-        var rec = UI.store('rum_wins') || { w: 0, l: 0 }, gkey = (s.gid || '') + ':' + s.round + ':' + s.players.map(function (p) { return p.score; }).join(',');
-        if (rec.last !== gkey) { rec.last = gkey; if (mine) rec.w++; else rec.l++; UI.store('rum_wins', rec); }
+        var entry = recordGame(s, seat(), src.info(), src.online), st = stats(), recTxt = ' Your record: ' + st.w + (st.w === 1 ? ' win, ' : ' wins, ') + st.l + (st.l === 1 ? ' loss.' : ' losses.');
+        entry.players.forEach(function (p, i) {
+          if (i === entry.seat || p.bot) return;
+          var x = st.people[personKey(p)]; if (!x) return;
+          if (x.vsW + x.vsL && !(entry.teams && p.tm === entry.myTeam)) recTxt += ' Against ' + p.n + ': ' + x.vsW + '-' + x.vsL + '.';
+          if (x.wW + x.wL && entry.teams && p.tm === entry.myTeam) recTxt += ' With ' + p.n + ': ' + x.wW + '-' + x.wL + '.';
+        });
+        wrap.appendChild(handHistory(s, seat()));
+        wrap.appendChild(h('button', { class: 'ghostbtn', text: 'See my full record', onclick: function () { UI.closeModal(); location.hash = '#/rummy/stats'; } }));
         var btns = src.online && !src.isHost ? [{ label: 'OK', cls: 'rummy' }] :
           [{ label: src.online ? 'Play again (same players)' : 'New game', cls: 'rummy', fn: function () {
             if (src.online) src.act('again'); else { UI.store('rum_game', null); location.hash = '#/rummy'; }
           } }];
         if (src.online) btns.push({ label: 'Leave online game', fn: function () { if (src.isHost) leaveOnline(); else closeNet(); location.hash = '#/rummy'; } });
         UI.modal({ big: mine ? '\uD83C\uDFC6' : '\uD83C\uDCCF', title: mine ? (s.teams ? 'Your team wins!' : 'You win!') : sideName(s, s.winner, seat()) + ' wins.',
-          text: head + ' Your record: ' + rec.w + ' wins, ' + rec.l + ' losses.' + (src.online && !src.isHost ? ' The host can start another game.' : ''), body: wrap, dismiss: false, buttons: btns });
+          text: head + recTxt + (src.online && !src.isHost ? ' The host can start another game.' : ''), body: wrap, dismiss: false, buttons: btns });
         return;
       }
       UI.modal({ title: head, body: wrap, dismiss: false,
@@ -668,6 +803,6 @@ var Rummy = (function () {
     render();
   }
 
-  return { setup: setup, play: play, online: online, host: hostScreen, join: joinScreen,
+  return { setup: setup, play: play, online: online, host: hostScreen, join: joinScreen, stats: statsScreen,
     _net: N, _driver: function () { return D; } };
 })();
