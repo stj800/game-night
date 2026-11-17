@@ -457,7 +457,7 @@ var Rummy = (function () {
     root.appendChild(h('div', { class: 'rules', html:
       '<h3>The goal</h3><p>Score points by laying cards on the table in <b>melds</b>. First to the target score wins.</p>' +
       '<h3>Melds</h3><ul><li><b>Set:</b> 3 or 4 cards of the same rank (7 7 7).</li><li><b>Run:</b> 3 or more in a row, same suit (4 5 6 of hearts). Aces go low (A 2 3) or high (Q K A), not around the corner.</li></ul>' +
-      '<h3>Your turn</h3><ol><li><b>Draw:</b> tap the deck, or tap any card in the discard pile. If you take a card that is not on top, you also take every card above it, and you must play that card in a meld right away.</li>' +
+      '<h3>Your turn</h3><ol><li><b>Draw:</b> tap the deck, or tap any card in the discard pile. Any card you take from the pile <b>must be played that same turn</b> (in a meld, or laid off). If it is not the top card, you also take every card above it. The game only lets you take a card you can play.</li>' +
       '<li><b>Meld:</b> tap cards to select them, then tap Meld. To <b>lay off</b> a single card on any meld already on the table (anyone\'s), select it and tap that meld.</li>' +
       '<li><b>Discard:</b> select one card and tap Discard. That ends your turn.</li></ol>' +
       '<h3>Scoring</h3><p>Cards you put on the table count for you. Cards still in your hand when someone goes out count against you. Aces 15 (1 point in A 2 3), face cards and 10s are 10, other cards are their number. The hand also ends when the deck runs out.</p>' +
@@ -739,9 +739,9 @@ var Rummy = (function () {
     function takeDiscard(i) {
       if (!myDraw()) return;
       var s = S(), top = i === s.discard.length - 1;
-      if (top) { Sound.play('swap'); src.act('pile', i); return; }
       var picked = s.discard.slice(i), card = picked[0];
-      if (!E.canUse(me().hand.concat(picked), card, s.melds)) { Sound.play('nope'); UI.toast('You can only take the ' + E.label(card) + ' if you can play it right away.'); return; }
+      if (!E.canUse(me().hand.concat(picked), card, s.melds)) { Sound.play('nope'); UI.toast('You can only take the ' + E.label(card) + ' if you can play it this turn.'); return; }
+      if (top) { Sound.play('swap'); src.act('pile', i); return; }
       var n = picked.length;
       UI.modal({ title: 'Take ' + n + ' cards?', text: 'You get the ' + E.label(card) + ' and the ' + (n - 1) + ' card' + (n > 2 ? 's' : '') + ' above it. You must play the ' + E.label(card) + ' this turn.',
         buttons: [{ label: 'Take them', cls: 'rummy', fn: function () { Sound.play('swap'); src.act('pile', i); } }, { label: 'Cancel' }] });

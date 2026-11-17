@@ -133,10 +133,10 @@ var RummyEngine = (function () {
     if (s.phase !== 'draw' || index < 0 || index >= s.discard.length) return { ok: false };
     var picked = s.discard.slice(index), card = picked[0], deep = index < s.discard.length - 1;
     var hand = cur(s).hand;
-    if (deep && !canUse(hand.concat(picked), card, s.melds)) return { ok: false, why: 'unusable' };
+    if (!canUse(hand.concat(picked), card, s.melds)) return { ok: false, why: 'unusable' };
     s.discard = s.discard.slice(0, index);
     picked.forEach(function (c) { hand.push(c); });
-    s.phase = 'play'; s.mustUse = deep ? card : null; s.tookTop = deep ? null : card;
+    s.phase = 'play'; s.mustUse = card; s.tookTop = deep ? null : card; // house rule: any card taken from the pile must be played this turn
     return { ok: true, picked: picked };
   }
   function meld(s, cards) {
