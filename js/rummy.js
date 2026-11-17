@@ -963,11 +963,10 @@ var Rummy = (function () {
         return r;
       }
       body.appendChild(row('Music', 'Vegas lounge band', Sound.prefs.music, Sound.setMusic, Sound.getVolume(), Sound.setVolume));
-      body.appendChild(row('Casino chatter', 'Crowd, chips, a slot bell far off', Sound.prefs.chat !== false, Sound.setChat, Sound.getChatVol(), Sound.setChatVol));
       body.appendChild(row('Card sounds', 'Shuffles, flicks and slaps', Sound.prefs.sfx, Sound.setSfx));
       UI.modal({ title: 'Music and sound', body: body, buttons: [{ label: 'Done', cls: 'rummy' }] });
     }
-    function startAudio() { Sound.playMusic('lounge', scene); Sound.startChatter(scene); }
+    function startAudio() { Sound.playMusic('lounge', scene); }
     startAudio();
     root.addEventListener('pointerdown', function unlock() {
       if (!document.body.contains(scene)) { root.removeEventListener('pointerdown', unlock); return; }
