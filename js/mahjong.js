@@ -182,13 +182,23 @@ var Mahjong = (function () {
       sc.appendChild(p);
       if (Math.random() < 0.15) { var k = h('span', { class: 'mover koi', text: cp(0x1F41F) }); k.addEventListener('animationend', function () { k.remove(); }); sc.appendChild(k); }
     }, 900);
-    // Music belongs to this screen only
-    Sound.playMusic('zen', sc);
-    root.addEventListener('pointerdown', function first() {
-      if (!document.body.contains(sc)) { root.removeEventListener('pointerdown', first); return; }
-      Sound.playMusic('zen', sc);
-    });
     return sc;
+  }
+
+  // Traditional Chinese music: Now Playing line + volume slider under the top bar. Stops itself when you leave Mahjong.
+  function music(root) {
+    var now = h('div', { class: 'nowplaying' + (Sound.prefs.music ? '' : ' muted'), html: '&#9835; Chinese music' });
+    root.appendChild(now);
+    var vol = h('input', { type: 'range', min: '0', max: '100', value: String(Math.round(Sound.getVolume() * 100)), 'aria-label': 'Music volume', class: 'volslider' });
+    vol.addEventListener('input', function () { Sound.setVolume(vol.value / 100); if (!Sound.prefs.music && vol.value > 0) { Sound.setMusic(true); now.classList.remove('muted'); start(); } });
+    vol.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    root.appendChild(h('div', { class: 'volrow' }, [h('span', { html: '&#128264;' }), vol, h('span', { html: '&#128266;' })]));
+    function start() { Sound.playClassical(now, function (p) { now.innerHTML = '&#9835; Now playing: <b>' + p.title + '</b> <span>' + p.composer + '</span>'; }, ChineseMusic); }
+    start();
+    root.addEventListener('pointerdown', function first() {
+      if (!document.body.contains(now)) { root.removeEventListener('pointerdown', first); return; }
+      now.classList.toggle('muted', !Sound.prefs.music); start();
+    });
   }
 
   function fmt(sec) { var m = Math.floor(sec / 60), s = sec % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
@@ -198,6 +208,7 @@ var Mahjong = (function () {
     scene(root);
     var cfg = UI.store('mj_cfg') || { level: 1 }, bests = UI.store('mj_best') || {};
     root.appendChild(UI.topbar('Mahjong', '#/', Swap.soundToggles()));
+    music(root);
     var noteEl = h('p', { class: 'levelnote' });
     function setNote() { var L = LAYOUTS[cfg.level - 1]; noteEl.textContent = L.name + ': ' + L.note + (bests[cfg.level] ? ' Best time ' + fmt(bests[cfg.level]) + '.' : ''); }
     root.appendChild(h('div', { class: 'panel glass' }, [h('h3', { text: 'Board' }), UI.seg(LAYOUTS, cfg.level, function (v) { cfg.level = v; setNote(); }), noteEl]));
@@ -213,6 +224,7 @@ var Mahjong = (function () {
     scene(root);
     var cfg = UI.store('mj_cfg') || { level: 1 }, L = LAYOUTS[cfg.level - 1];
     root.appendChild(UI.topbar('Mahjong', '#/mahjong', Swap.soundToggles()));
+    music(root);
     var bar = h('div', { class: 'sbar mjbar' }), boardEl = h('div', { class: 'mjboard' }), fx = h('div', { class: 'fxlayer' });
     root.appendChild(fx); root.appendChild(bar); root.appendChild(boardEl);
     var tiles, sel = null, hint = null, undo = [], time = 0, done = false, pairsMade = 0, lastMatchAt = 0, combo = 0;
@@ -297,6 +309,7 @@ var Mahjong = (function () {
   function learn(root) {
     scene(root);
     root.appendChild(UI.topbar('Learn Mahjong', '#/mahjong', Swap.soundToggles()));
+    music(root);
     var steps = [
       { t: 'The goal', p: 'Mahjong Solitaire is a matching game for one player. The tiles are stacked in a pile. Clear the whole pile by removing matching pairs, two tiles at a time.' },
       { t: 'Free tiles', p: 'You can only pick a FREE tile. A tile is free when nothing is sitting on top of it, and its left side OR its right side is open. Free tiles glow in the Beginner board. Tiles in the middle of a row are stuck until you clear a side.' },

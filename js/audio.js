@@ -126,6 +126,24 @@ var Sound = (function () {
 
   // ---------- Classical (public-domain pieces from classical.js, played on a soft piano voice) ----------
   var clas = null;
+  // Plucked zither (guzheng-style): bright pluck that bends into pitch, long notes get the classic tremolo
+  function zheng(t, m, dur, bass) {
+    var plucks = (!bass && dur >= 0.6) ? Math.floor(dur / 0.09) : 1;
+    for (var k = 0; k < plucks; k++) {
+      var tt = t + k * (plucks > 1 ? 0.09 : 0), vol = (bass ? 0.2 : 0.3) * (k === 0 ? 1 : 0.45), len = plucks > 1 ? 0.22 : Math.min(1.6, dur + (bass ? 1.0 : 0.6));
+      [['triangle', 0, 1], ['sawtooth', 0, 0.18], ['sine', 12, 0.25]].forEach(function (p) {
+        var o = ctx.createOscillator(), g = ctx.createGain(), fl = ctx.createBiquadFilter();
+        o.type = p[0]; o.frequency.setValueAtTime(hz(m + p[1] + 0.35), tt); o.frequency.exponentialRampToValueAtTime(hz(m + p[1]), tt + 0.05);
+        fl.type = 'lowpass'; fl.frequency.setValueAtTime(bass ? 1400 : 4200, tt); fl.frequency.exponentialRampToValueAtTime(bass ? 400 : 1100, tt + len);
+        var v = vol * p[2];
+        g.gain.setValueAtTime(0.0001, tt); g.gain.exponentialRampToValueAtTime(v, tt + 0.003); g.gain.exponentialRampToValueAtTime(0.0001, tt + len);
+        o.connect(fl); fl.connect(g); g.connect(musicBus); o.start(tt); o.stop(tt + len + 0.05);
+      });
+    }
+  }
+  function woodblock(t) { tone(musicBus, t, 84, 0.06, 'sine', 0.12, { slideTo: 79 }); noise(musicBus, t, 0.03, 0.08, 'bandpass', 2500); }
+  function gong(t) { [36, 43, 48.3].forEach(function (m, k) { tone(musicBus, t, m, 3.2, 'sine', 0.16 / (k + 1), { attack: 0.02, slideTo: m - 0.4 }); }); noise(musicBus, t, 1.2, 0.07, 'lowpass', 600); }
+
   function piano(t, m, dur, bass) {
     var vol = bass ? 0.16 : 0.26, len = Math.min(2.6, dur + (bass ? 1.2 : 0.7));
     [['triangle', 0, 1], ['sine', 12, 0.35]].forEach(function (p) {
@@ -139,35 +157,39 @@ var Sound = (function () {
     });
   }
   function startPiece(t0) {
-    var p = Classical[clas.pi];
+    var p = clas.list[clas.pi];
     clas.voices = p.voices.map(function (v, k) { return { v: v, i: 0, t: t0, bass: k > 0 }; });
+    if (p.inst === 'zheng') { clas.beat = t0; if (clas.rep === 0) gong(t0); }
     clas.end = t0 + p.voices[0].reduce(function (s2, n) { return s2 + n[1]; }, 0) * p.unit;
     if (clas.onPiece && clas.rep === 0) { var delay = Math.max(0, (t0 - ctx.currentTime) * 1000); var cb = clas.onPiece; setTimeout(function () { cb(p); }, delay); }
   }
   function schedClassical() {
     if (!clas || !ctx) return;
     if (owner && !document.body.contains(owner)) { stopMusic(); return; }
-    var p = Classical[clas.pi], horizon = ctx.currentTime + 0.35;
+    var p = clas.list[clas.pi], horizon = ctx.currentTime + 0.35;
+    if (p.inst === 'zheng') { while (clas.beat < Math.min(horizon, clas.end)) { woodblock(clas.beat); clas.beat += p.unit * 4; } }
     clas.voices.forEach(function (vc) {
       while (vc.i < vc.v.length && vc.t < horizon) {
         var n = vc.v[vc.i], d = n[1] * p.unit;
-        if (n[0]) piano(vc.t, n[0], d, vc.bass);
+        if (n[0]) (p.inst === 'zheng' ? zheng : piano)(vc.t, n[0], d, vc.bass);
         vc.t += d; vc.i++;
       }
     });
     if (ctx.currentTime > clas.end - 0.3 && clas.voices.every(function (vc) { return vc.i >= vc.v.length; })) {
       clas.rep++;
       if (clas.rep < p.repeat) startPiece(clas.end);
-      else { clas.pi = (clas.pi + 1) % Classical.length; clas.rep = 0; startPiece(clas.end + 1.5); }
+      else { clas.pi = (clas.pi + 1) % clas.list.length; clas.rep = 0; startPiece(clas.end + 1.5); }
     }
   }
   // After every screen change: if no screen on display owns the music, stop it
   function checkOwner() { if (timer && (!owner || !document.body.contains(owner))) stopMusic(); }
-  function playClassical(ownerEl, onPiece) {
-    if (typeof Classical === 'undefined' || !init()) return;
-    if (clas && timer) { owner = ownerEl; clas.onPiece = onPiece; if (onPiece) onPiece(Classical[clas.pi]); return; }
+  // list = which playlist (Classical for chess, ChineseMusic for Mahjong)
+  function playClassical(ownerEl, onPiece, list) {
+    list = list || (typeof Classical !== 'undefined' ? Classical : null);
+    if (!list || !init()) return;
+    if (clas && timer && clas.list === list) { owner = ownerEl; clas.onPiece = onPiece; if (onPiece) onPiece(list[clas.pi]); return; }
     stopMusic(); owner = ownerEl;
-    clas = { pi: Math.floor(Math.random() * Classical.length), rep: 0, onPiece: onPiece };
+    clas = { list: list, pi: Math.floor(Math.random() * list.length), rep: 0, onPiece: onPiece };
     startPiece(ctx.currentTime + 0.25);
     timer = setInterval(schedClassical, 60);
   }

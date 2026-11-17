@@ -654,3 +654,5 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .volslider { flex: 1; -webkit-appearance: none; appearance: none; height: 8px; border-radius: 99px; background: linear-gradient(90deg, #7b3fe4, #e0407b); outline: none; }
 .volslider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.4); border: 3px solid #e0407b; }
 .volslider::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid #e0407b; }
+.fsscene ~ .nowplaying { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+.fsscene ~ .nowplaying b { color: #fff3a8; }
