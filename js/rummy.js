@@ -663,19 +663,38 @@ var Rummy = (function () {
       status.textContent = text; status.classList.toggle('alert', !!hintMsg || myTurn());
       // table melds
       tbl.innerHTML = '';
-      if (!s.melds.length) tbl.appendChild(h('p', { class: 'rumempty', text: 'Melds will show up here.' }));
       var one = sel.length === 1 ? sel[0] : null;
+      // One row per player (others first, you last): their melds plus what they scored on the table this hand
+      var order = [];
+      for (var k = 1; k <= s.players.length; k++) order.push((mySeat + k) % s.players.length);
+      var rowsBy = {};
+      order.forEach(function (i) {
+        var p = s.players[i], partner = s.teams && i !== mySeat && p.team === my.team;
+        var row = h('div', { class: 'rumgroup', style: '--c:' + COLORS[i] }, [
+          h('div', { class: 'rumghead' }, [
+            h('b', { text: (i === mySeat ? 'You' : cp(AV[i]) + ' ' + p.name + (partner ? ' (partner)' : '')) }),
+            h('span', { text: p.table ? '+' + p.table + ' on the table this hand' : 'nothing down yet' })
+          ]),
+          h('div', { class: 'rumgmelds' })
+        ]);
+        rowsBy[i] = row.lastChild; tbl.appendChild(row);
+      });
       s.melds.forEach(function (md, mi) {
         var ok = one !== null && myTurn() && s.phase === 'play' && E.layOffResult(md, one);
         var g = h('button', { class: 'rummeld' + (ok ? ' can' : ''), style: '--c:' + COLORS[md.by] });
-        md.cards.forEach(function (c) { g.appendChild(cardEl(c, 'sm')); });
+        md.cards.forEach(function (c) {
+          var who = md.lo && md.lo[c] !== undefined ? md.lo[c] : null;
+          var el = cardEl(c, 'sm' + (who !== null && who !== md.by ? ' lo' : ''));
+          if (who !== null && who !== md.by) { el.style.setProperty('--lc', COLORS[who]); el.title = 'Laid off by ' + s.players[who].name; }
+          g.appendChild(el);
+        });
         g.addEventListener('click', function () {
           if (!myTurn() || S().phase !== 'play') return;
           if (one === null) { UI.toast('Select one card from your hand, then tap a meld to lay it off.'); return; }
           if (!ok) { UI.toast(E.label(one) + ' does not fit that meld.'); Sound.play('nope'); return; }
           Sound.play('pop', 3); sel = []; hintMsg = ''; src.act('layoff', [one, mi]);
         });
-        tbl.appendChild(g);
+        (rowsBy[md.by] || tbl).appendChild(g);
       });
       // piles
       stockEl.innerHTML = ''; stockEl.appendChild(h('div', { class: 'pcard back' }, h('span', { class: 'pc-mid', text: s.stock.length })));

@@ -817,3 +817,10 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .rumsub { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 14px 0 2px; }
 .rumhist td small { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
 .rumroundmodal { max-height: 55vh; overflow-y: auto; }
+.rumgroup { width: 100%; background: rgba(0,0,0,0.14); border-left: 4px solid var(--c); border-radius: 10px; padding: 5px 6px 6px 8px; }
+.rumghead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; margin-bottom: 3px; }
+.rumghead span { color: #cdeedb; font-size: 12px; }
+.rumgmelds { display: flex; flex-wrap: wrap; gap: 6px; min-height: 4px; }
+.rumgmelds:empty { display: none; }
+.rumtable { flex-direction: column; flex-wrap: nowrap; gap: 6px; max-height: 38vh; }
+.pcard.lo::after { content: ''; position: absolute; bottom: 3px; left: 3px; width: 10px; height: 10px; border-radius: 50%; background: var(--lc); border: 2px solid #fff; }

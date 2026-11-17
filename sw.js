@@ -1,5 +1,5 @@
 /* Offline cache. Bump VERSION on every deploy. */
-var VERSION = 'gn-v29';
+var VERSION = 'gn-v30';
 var FILES = ['./', 'index.html', 'styles.css', 'manifest.json', 'icon-180.png', 'icon-512.png',
   'js/ui.js', 'js/audio.js', 'js/classical.js', 'js/chinese.js', 'js/chess-engine.js', 'js/chess.js', 'js/checkers.js', 'js/sudoku.js', 'js/blocks.js', 'js/breakout.js', 'js/rocks.js', 'js/invaders.js', 'js/mahjong.js', 'js/memory.js', 'js/rummy-engine.js', 'js/rummy.js', 'js/swap-engine.js', 'js/swap.js', 'js/app.js'];
 self.addEventListener('install', function (e) {

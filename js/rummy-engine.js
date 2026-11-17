@@ -158,6 +158,7 @@ var RummyEngine = (function () {
     m.cards = nm.cards; if (nm.type === 'run') m.low = nm.low;
     m.pts = meldPoints(m);
     removeCards(p.hand, [card]); p.table += meldValue(card, m);
+    (m.lo = m.lo || {})[card] = s.turn;
     if (card === s.mustUse) s.mustUse = null;
     checkOut(s);
     return m;
