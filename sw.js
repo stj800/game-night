@@ -1,5 +1,5 @@
 /* Offline cache. Bump VERSION on every deploy. */
-var VERSION = 'gn-v2';
+var VERSION = 'gn-v3';
 var FILES = ['./', 'index.html', 'styles.css', 'manifest.json', 'icon-180.png', 'icon-512.png',
   'js/ui.js', 'js/chess-engine.js', 'js/chess.js', 'js/checkers.js', 'js/sudoku.js', 'js/blocks.js', 'js/swap.js', 'js/app.js'];
 self.addEventListener('install', function (e) {

@@ -86,7 +86,11 @@ var Swap = (function () {
         }
       });
     }
-    var cleared = Object.keys(kill).map(function (k) { return k.split(',').map(Number); });
+    var cleared = Object.keys(kill).map(function (k) {
+      var p = k.split(',').map(Number), cell = g[p[0]][p[1]];
+      p.was = cell ? { t: cell.t, sp: cell.sp } : null; // remember what was here so it can be animated away
+      return p;
+    });
     var keep = {};
     created.forEach(function (cr) { keep[cr.r + ',' + cr.c] = cr; });
     cleared.forEach(function (p) { g[p[0]][p[1]] = keep[p[0] + ',' + p[1]] ? { t: keep[p[0] + ',' + p[1]].t, sp: keep[p[0] + ',' + p[1]].sp } : null; });
@@ -96,7 +100,7 @@ var Swap = (function () {
     var target = g[other[0]][other[1]].t, cleared = [];
     for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) if (g[r][c] && g[r][c].t === target) cleared.push([r, c]);
     cleared.push(star);
-    cleared.forEach(function (p) { g[p[0]][p[1]] = null; });
+    cleared.forEach(function (p) { var cell = g[p[0]][p[1]]; p.was = cell ? { t: cell.t, sp: cell.sp } : null; g[p[0]][p[1]] = null; });
     return { cleared: cleared, points: cleared.length * 80 };
   }
   function gravity(g, kinds) {
@@ -151,28 +155,42 @@ var Swap = (function () {
     var g, score, moves, busy, sel, hintTimer, done, tiles = [];
 
     for (var i = 0; i < N * N; i++) {
-      (function (idx) {
-        var t = h('div', { class: 'fstile' });
-        var sx = 0, sy = 0, down = false;
-        t.addEventListener('pointerdown', function (e) { e.preventDefault(); down = true; sx = e.clientX; sy = e.clientY; });
-        t.addEventListener('pointermove', function (e) {
-          if (!down) return;
-          var dx = e.clientX - sx, dy = e.clientY - sy;
-          if (Math.max(Math.abs(dx), Math.abs(dy)) > 18) {
-            down = false;
-            var r = Math.floor(idx / N), c = idx % N, b = Math.abs(dx) > Math.abs(dy) ? [r, c + (dx > 0 ? 1 : -1)] : [r + (dy > 0 ? 1 : -1), c];
-            if (b[0] >= 0 && b[0] < N && b[1] >= 0 && b[1] < N) { sel = null; attempt([r, c], b); }
-          }
-        });
-        t.addEventListener('pointerup', function () {
-          if (!down) return; down = false;
-          var r = Math.floor(idx / N), c = idx % N;
-          if (sel && Math.abs(sel[0] - r) + Math.abs(sel[1] - c) === 1) { var a = sel; sel = null; attempt(a, [r, c]); }
-          else { sel = sel && sel[0] === r && sel[1] === c ? null : [r, c]; render(); }
-        });
-        tiles.push(t); gridEl.appendChild(t);
-      })(i);
+      var t = h('div', { class: 'fstile', 'data-i': i });
+      tiles.push(t); gridEl.appendChild(t);
     }
+    // Gestures are tracked on the whole board (with pointer capture), not on one tile.
+    // Tracking per tile lost sideways swipes: the finger leaves the starting tile at once.
+    var drag = null;
+    function tileAt(x, y) {
+      var rect = gridEl.getBoundingClientRect();
+      var c = Math.floor((x - rect.left) / (rect.width / N)), r = Math.floor((y - rect.top) / (rect.height / N));
+      return (r >= 0 && r < N && c >= 0 && c < N) ? [r, c] : null;
+    }
+    gridEl.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      var p = tileAt(e.clientX, e.clientY); if (!p) return;
+      drag = { p: p, x: e.clientX, y: e.clientY, id: e.pointerId };
+      try { gridEl.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    gridEl.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      e.preventDefault();
+      var dx = e.clientX - drag.x, dy = e.clientY - drag.y, cellW = gridEl.getBoundingClientRect().width / N;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > Math.min(24, cellW * 0.4)) {
+        var a = drag.p, b = Math.abs(dx) > Math.abs(dy) ? [a[0], a[1] + (dx > 0 ? 1 : -1)] : [a[0] + (dy > 0 ? 1 : -1), a[1]];
+        drag = null;
+        if (b[0] >= 0 && b[0] < N && b[1] >= 0 && b[1] < N) { sel = null; attempt(a, b); }
+      }
+    });
+    function endDrag(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var p = drag.p; drag = null;
+      if (e.type === 'pointercancel') return;
+      if (sel && Math.abs(sel[0] - p[0]) + Math.abs(sel[1] - p[1]) === 1) { var a = sel; sel = null; attempt(a, p); }
+      else { sel = sel && sel[0] === p[0] && sel[1] === p[1] ? null : p; render(); }
+    }
+    gridEl.addEventListener('pointerup', endDrag);
+    gridEl.addEventListener('pointercancel', endDrag);
 
     function render(falls, pops) {
       var fallMap = {}; (falls || []).forEach(function (f) { fallMap[f.r + ',' + f.c] = f.d; });
@@ -182,7 +200,12 @@ var Swap = (function () {
         t.textContent = cell ? (cell.sp === 'star' ? STAR : FRUIT[cell.t]) : '';
         if (fallMap[k]) { t.style.setProperty('--d', fallMap[k]); t.classList.add('fall'); void t.offsetWidth; }
       }
-      (pops || []).forEach(function (p) { tiles[p[0] * N + p[1]].classList.add('pop'); });
+      // Matched fruit stay on screen (drawn from what WAS there) and all pop together.
+      (pops || []).forEach(function (p) {
+        var t = tiles[p[0] * N + p[1]];
+        if (p.was) { t.textContent = p.was.sp === 'star' ? STAR : FRUIT[p.was.t]; if (p.was.sp) t.classList.add('sp-' + p.was.sp); }
+        t.classList.add('pop');
+      });
       bar.innerHTML = '';
       bar.appendChild(h('div', null, [h('div', { class: 'bdlabel', text: 'MOVES' }), h('div', { class: 'bdval', text: String(moves) })]));
       bar.appendChild(h('div', null, [h('div', { class: 'bdlabel', text: 'SCORE' }), h('div', { class: 'bdval', text: String(score) })]));
@@ -190,6 +213,7 @@ var Swap = (function () {
       meter.firstChild.style.width = Math.min(100, score / L.target * 100) + '%';
     }
 
+    var POP_MS = 640, FALL_MS = 560;
     function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
     function resetHint() { clearTimeout(hintTimer); hintTimer = setTimeout(function () { showHint(false); }, 7000); }
@@ -206,12 +230,16 @@ var Swap = (function () {
       var A = g[a[0]][a[1]], B = g[b[0]][b[1]];
       if (A.sp === 'star' || B.sp === 'star') {
         var star = A.sp === 'star' ? a : b, other = A.sp === 'star' ? b : a;
-        if (g[other[0]][other[1]].sp === 'star') { for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) g[r][c] = null; score += 64 * 100; }
-        else { var res = starBlast(g, star, other); score += res.points; render(null, res.cleared); }
-        moves--; UI.vibrate(40);
-        await wait(240);
+        var res;
+        if (g[other[0]][other[1]].sp === 'star') {
+          res = { cleared: [], points: 64 * 100 };
+          for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) { var p = [r, c]; p.was = g[r][c]; res.cleared.push(p); g[r][c] = null; }
+        } else res = starBlast(g, star, other);
+        score += res.points; moves--; UI.vibrate(40);
+        render(null, res.cleared);
+        await wait(POP_MS);
         render(gravity(g, L.kinds));
-        await wait(300);
+        await wait(FALL_MS);
         await cascade(null, 2);
       } else {
         swapCells(g, a, b); render();
@@ -236,9 +264,9 @@ var Swap = (function () {
         if (combo >= 3) UI.toast(combo >= 5 ? 'Fruit frenzy! x' + combo : 'Combo x' + combo);
         UI.vibrate(combo > 1 ? 20 : 10);
         render(null, step.cleared.filter(function (p) { return !g[p[0]][p[1]]; }));
-        await wait(240);
+        await wait(POP_MS);
         render(gravity(g, L.kinds));
-        await wait(320);
+        await wait(FALL_MS);
         focus = null; combo++;
       }
     }
