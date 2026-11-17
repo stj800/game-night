@@ -364,3 +364,12 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .fsgrid.shakebig { animation: shake 0.55s 1.4; }
 @keyframes shake { 20% { transform: translate(-4px, 2px) rotate(-0.6deg); } 40% { transform: translate(4px, -2px) rotate(0.6deg); } 60% { transform: translate(-3px, 1px); } 80% { transform: translate(2px, -1px); } }
 @media (prefers-reduced-motion: reduce) { .mover, .decor, .twinkle, .groundflower { animation: none !important; } .mover { display: none; } }
+.soundtoggle {
+  display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 10px 0 8px; border-radius: 14px;
+  background: rgba(27,20,70,0.6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); font-size: 19px; color: #fff;
+}
+.soundtoggle span { font-size: 10px; line-height: 1.15; text-align: left; letter-spacing: 0.3px; }
+.soundtoggle span b { font-size: 12px; color: #3ee08f; }
+.soundtoggle.off span b { color: #ff5d73; }
+.soundtoggle:active { transform: scale(0.95); }
+.fsscene ~ .topbar h1 { font-size: 19px; }

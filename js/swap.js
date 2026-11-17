@@ -159,10 +159,15 @@ var Swap = (function () {
   function play(root) {
     var cfg = UI.store('fs_cfg') || { level: 1 }, L = LEVELS[cfg.level - 1];
     var TH = THEMES[cfg.level] || THEMES[1];
-    var musicBtn = h('button', { class: 'iconbtn', 'aria-label': 'Music on or off' }), sfxBtn = h('button', { class: 'iconbtn', 'aria-label': 'Sound on or off' });
+    var musicBtn = h('button', { class: 'soundtoggle' }), sfxBtn = h('button', { class: 'soundtoggle' });
     function paintToggles() {
-      musicBtn.innerHTML = Sound.prefs.music ? '&#127925;' : '<s>&#127925;</s>'; musicBtn.style.opacity = Sound.prefs.music ? 1 : 0.5;
-      sfxBtn.innerHTML = Sound.prefs.sfx ? '&#128266;' : '&#128263;';
+      // Clear labels: what it is and whether it is on
+      musicBtn.innerHTML = (Sound.prefs.music ? '&#127925;' : '&#128263;') + '<span>Music<br><b>' + (Sound.prefs.music ? 'On' : 'Off') + '</b></span>';
+      musicBtn.classList.toggle('off', !Sound.prefs.music);
+      musicBtn.setAttribute('aria-label', Sound.prefs.music ? 'Mute music' : 'Turn music on');
+      sfxBtn.innerHTML = (Sound.prefs.sfx ? '&#128266;' : '&#128263;') + '<span>Sounds<br><b>' + (Sound.prefs.sfx ? 'On' : 'Off') + '</b></span>';
+      sfxBtn.classList.toggle('off', !Sound.prefs.sfx);
+      sfxBtn.setAttribute('aria-label', Sound.prefs.sfx ? 'Mute sound effects' : 'Turn sound effects on');
     }
     musicBtn.addEventListener('click', function () { Sound.setMusic(!Sound.prefs.music); Sound.playMusic(TH.song); paintToggles(); });
     sfxBtn.addEventListener('click', function () { Sound.setSfx(!Sound.prefs.sfx); paintToggles(); });
@@ -182,6 +187,8 @@ var Swap = (function () {
     var fx = h('div', { class: 'fxlayer' });
     root.appendChild(fx);
     root.appendChild(UI.topbar('Fruit Swap', '#/swap', h('div', { class: 'fstoggles' }, [musicBtn, sfxBtn])));
+    musicBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    sfxBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
     var bar = h('div', { class: 'fsbar' }), meter = h('div', { class: 'fsmeter' }, h('i')), gridEl = h('div', { class: 'fsgrid' });
     // Background life that fits the scene: butterflies and parrots fly across, bubbles rise from the sea,
     // fireflies blink, the odd shooting star. Kept to a handful at a time so it never gets busy.

@@ -130,5 +130,6 @@ var Sound = (function () {
   function setMusic(on) { prefs.music = on; save(); if (ctx) musicBus.gain.setTargetAtTime(on ? 0.22 : 0, ctx.currentTime, 0.05); }
   function setSfx(on) { prefs.sfx = on; save(); if (ctx) sfxBus.gain.setTargetAtTime(on ? 0.55 : 0, ctx.currentTime, 0.05); }
 
-  return { init: init, playMusic: playMusic, stopMusic: stopMusic, play: play, prefs: prefs, setMusic: setMusic, setSfx: setSfx };
+  function state() { return ctx ? { ctx: ctx.state, music: musicBus.gain.value, sfx: sfxBus.gain.value, playing: !!timer } : null; }
+  return { init: init, playMusic: playMusic, stopMusic: stopMusic, play: play, prefs: prefs, setMusic: setMusic, setSfx: setSfx, state: state };
 })();
