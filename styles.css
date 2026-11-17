@@ -919,3 +919,5 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .pithand .pcard.trump::before { font-size: calc(10px * var(--cs)); }
 .cardprefs { gap: 10px; }
 .pitseat.w, .pitseat.e { max-width: 36%; }
+.fiestaskip { position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 2500; padding: 14px 30px; border: 0; border-radius: 999px; font: inherit; font-weight: 800; font-size: 18px; color: #3b1d00; background: linear-gradient(135deg, #ffe066 0%, #ff9f43 100%); box-shadow: 0 6px 18px rgba(0,0,0,0.4), 0 0 0 3px #fff; }
+.fiestaskip:disabled { opacity: 0.7; }

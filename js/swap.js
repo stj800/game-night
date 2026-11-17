@@ -564,17 +564,34 @@ var Swap = (function () {
         buttons: [{ label: 'Try again', cls: 'swap', fn: start }, { label: 'Back to the map', fn: function () { location.hash = '#/swap'; } }] });
     }
 
+    // Skip button for the end-of-level Fruit Fiesta: the rest is worked out instantly, same points.
+    var skipBtn = null, skipping = false;
+    function showSkip() {
+      skipping = false;
+      skipBtn = h('button', { class: 'fiestaskip', text: 'Skip ' + String.fromCodePoint(0x23E9), 'aria-label': 'Skip the bonus and see your results', onclick: function () { skipping = true; skipBtn.disabled = true; skipBtn.textContent = 'Skipping...'; } });
+      root.appendChild(skipBtn);
+    }
+    function hideSkip() { if (skipBtn) { skipBtn.remove(); skipBtn = null; } }
+    async function pause(ms) { for (var t = 0; t < ms && !skipping; t += 100) await wait(Math.min(100, ms - t)); }
+    function instantSettle() {
+      for (var g = 0; g < 20; g++) { E.gravity(st); var nuts = E.collectNuts(st); if (!nuts.length) break; stats.points += 1000 * nuts.length; }
+    }
+    function instantCascade(combo) {
+      for (var g = 0; g < 40; g++) { stats.combo = combo; if (!E.matchStep(st, null, stats)) break; instantSettle(); combo++; }
+    }
+
     async function win() {
       done = true; clearTimeout(hintTimer); busy = true;
+      if (moves > 0) showSkip();
       if (L.boss) {
         bossFace.classList.add('defeated'); Sound.play('blast'); shake(true);
         fxText(L.boss.final ? 'FINAL BOSS DEFEATED!' : 'Boss defeated!', 'banner'); Sound.say(L.boss.final ? 'Final boss defeated! You are the champion!' : 'Boss defeated!');
         Sound.play('win'); await wait(1600);
       } else { Sound.play('win'); fxText('Level complete!', 'banner'); Sound.say('Level complete!'); }
-      await wait(1400);
+      await pause(1400);
       // Fruit Fiesta: every leftover move becomes a striped fruit that fires for bonus points
       if (moves > 0) {
-        cheer('Fruit Fiesta!'); await wait(500);
+        if (!skipping) { cheer('Fruit Fiesta!'); await pause(500); }
         var n = Math.min(moves, 15);
         for (var k = 0; k < n && document.body.contains(gridEl); k++) {
           var spots = [];
@@ -584,12 +601,13 @@ var Swap = (function () {
           st.cells[p[0]][p[1]].sp = Math.random() < 0.5 ? 'row' : 'col';
           moves--; stats.points += 300; stats.combo = 1;
           var before = stats.points, res = E.explode(st, [p], null, stats); res.pointsBefore = before;
-          await animate(res, 1, true);
+          if (skipping) instantSettle(); else await animate(res, 1, true);
         }
         stats.points += Math.max(0, moves) * 300; moves = 0;
-        await cascade(null, 2);
+        if (skipping) instantCascade(2); else await cascade(null, 2);
         render();
       }
+      hideSkip();
       var P = prog(), stars = starsFor(score()), reward = '';
       var firstWin = !P.stars[L.n];
       P.stars[L.n] = Math.max(P.stars[L.n] || 0, stars);
