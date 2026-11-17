@@ -644,3 +644,13 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .mjguide .guiderow b { display: block; margin-bottom: 6px; font-size: 14px; }
 .guidetiles { display: flex; gap: 10px; flex-wrap: wrap; }
 .mjtile.mini { position: relative; --tw: 42px; --th: 56px; --depth: 3px; display: inline-block; }
+
+/* Chess: classical music line */
+.nowplaying { text-align: center; font-size: 13px; color: #d9d3ff; margin: -6px 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nowplaying b { color: #ffe27a; }
+.nowplaying span { opacity: 0.75; }
+.nowplaying.muted { opacity: 0.45; }
+.volrow { display: flex; align-items: center; gap: 10px; margin: -4px 8px 12px; font-size: 18px; }
+.volslider { flex: 1; -webkit-appearance: none; appearance: none; height: 8px; border-radius: 99px; background: linear-gradient(90deg, #7b3fe4, #e0407b); outline: none; }
+.volslider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.4); border: 3px solid #e0407b; }
+.volslider::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid #e0407b; }

@@ -52,11 +52,11 @@
 
   function route() {
     UI.closeModal();
-    if (window.Sound) Sound.stopMusic();
     var path = location.hash.replace(/^#\/?/, '');
     var fn = routes[path] || home;
     app.innerHTML = '';
     fn(app);
+    if (window.Sound) Sound.checkOwner(); // music keeps playing only if the new screen claimed it
     window.scrollTo(0, 0);
   }
   window.addEventListener('hashchange', route);

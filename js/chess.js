@@ -9,6 +9,34 @@ var Chess = (function () {
     { value: 3, label: 'Advanced', note: 'Thinks several moves deep. Protect every piece and watch for tricks.' }
   ];
 
+  // Classical music (chess only): a Music On/Off button and a Now Playing line. Stops itself when you leave chess.
+  function withMusic(root, title, back) {
+    var btn = h('button', { class: 'soundtoggle' });
+    function paint() {
+      btn.innerHTML = (Sound.prefs.music ? '&#127929;' : '&#128263;') + '<span>Music<br><b>' + (Sound.prefs.music ? 'On' : 'Off') + '</b></span>';
+      btn.classList.toggle('off', !Sound.prefs.music); btn.setAttribute('aria-label', Sound.prefs.music ? 'Mute music' : 'Turn music on');
+    }
+    btn.addEventListener('click', function () { Sound.setMusic(!Sound.prefs.music); paint(); start(); now.classList.toggle('muted', !Sound.prefs.music); });
+    paint();
+    root.appendChild(UI.topbar(title, back, btn));
+    var now = h('div', { class: 'nowplaying' + (Sound.prefs.music ? '' : ' muted'), html: '&#9835; Classical music' });
+    root.appendChild(now);
+    // Volume slider
+    var vol = h('input', { type: 'range', min: '0', max: '100', value: String(Math.round(Sound.getVolume() * 100)), 'aria-label': 'Music volume', class: 'volslider' });
+    vol.addEventListener('input', function () {
+      Sound.setVolume(vol.value / 100);
+      if (!Sound.prefs.music && vol.value > 0) { Sound.setMusic(true); paint(); now.classList.remove('muted'); start(); }
+    });
+    vol.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    root.appendChild(h('div', { class: 'volrow' }, [h('span', { html: '&#128264;' }), vol, h('span', { html: '&#128266;' })]));
+    function start() { Sound.playClassical(now, function (p) { now.innerHTML = '&#9835; Now playing: <b>' + p.title + '</b> <span>' + p.composer + '</span>'; }); }
+    start();
+    root.addEventListener('pointerdown', function first() {
+      if (!document.body.contains(now)) { root.removeEventListener('pointerdown', first); return; }
+      start();
+    });
+  }
+
   function pieceEl(p) {
     return h('span', { class: 'piece ' + E.colorOf(p), text: GLYPH[E.typeOf(p)] + VS });
   }
@@ -48,7 +76,7 @@ var Chess = (function () {
   function setup(root) {
     var cfg = UI.store('chess_cfg2') || { mode: 'ai', level: 1, color: 'r' };
     var saved = UI.store('chess_game');
-    root.appendChild(UI.topbar('Chess', '#/'));
+    withMusic(root, 'Chess', '#/');
     var noteEl = h('p', { class: 'levelnote' });
     function setNote() { noteEl.textContent = LEVELS[cfg.level - 1].note; }
     var levelPanel = h('div', { class: 'panel' }, [h('h3', { text: 'Level' }),
@@ -86,7 +114,7 @@ var Chess = (function () {
     });
 
     var title = ai ? 'Chess vs Computer' : 'Chess - 2 players';
-    root.appendChild(UI.topbar(title, '#/chess'));
+    withMusic(root, title, '#/chess');
     var topP = h('div', { class: 'players' }), botP = h('div', { class: 'players' });
     var statusEl = h('div', { class: 'status' });
     var boardEl = h('div', { class: 'board' });
@@ -311,7 +339,7 @@ var Chess = (function () {
   function learn(root, startAt) {
     var done = UI.store('chess_lessons') || {};
     var cur = Math.min(Math.max(startAt || 0, 0), LESSONS.length - 1);
-    root.appendChild(UI.topbar('Learn chess', '#/chess'));
+    withMusic(root, 'Learn chess', '#/chess');
     var nav = h('div', { class: 'lessonnav' });
     var textEl = h('div', { class: 'lessontext' });
     var boardEl = h('div', { class: 'board' });

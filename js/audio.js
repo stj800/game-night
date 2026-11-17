@@ -13,7 +13,7 @@ var Sound = (function () {
     ctx = new AC();
     master = ctx.createGain(); master.gain.value = 0.9; master.connect(ctx.destination);
     var comp = ctx.createDynamicsCompressor(); comp.connect(master);
-    musicBus = ctx.createGain(); musicBus.gain.value = prefs.music ? 0.22 : 0; musicBus.connect(comp);
+    musicBus = ctx.createGain(); musicBus.gain.value = musicLevel(); musicBus.connect(comp);
     sfxBus = ctx.createGain(); sfxBus.gain.value = prefs.sfx ? 0.55 : 0; sfxBus.connect(comp);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
     var d = noiseBuf.getChannelData(0); for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -122,7 +122,55 @@ var Sound = (function () {
     song = next; step = 0; nextTime = ctx.currentTime + 0.1;
     timer = setInterval(schedule, 25);
   }
-  function stopMusic() { clearInterval(timer); timer = null; song = null; owner = null; }
+  function stopMusic() { clearInterval(timer); timer = null; song = null; owner = null; clas = null; }
+
+  // ---------- Classical (public-domain pieces from classical.js, played on a soft piano voice) ----------
+  var clas = null;
+  function piano(t, m, dur, bass) {
+    var vol = bass ? 0.16 : 0.26, len = Math.min(2.6, dur + (bass ? 1.2 : 0.7));
+    [['triangle', 0, 1], ['sine', 12, 0.35]].forEach(function (p) {
+      var o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+      o.type = p[0]; o.frequency.setValueAtTime(hz(m + p[1]), t);
+      f.type = 'lowpass'; f.frequency.setValueAtTime(bass ? 1200 : 3200, t); f.frequency.exponentialRampToValueAtTime(bass ? 500 : 900, t + len);
+      var v = vol * p[2];
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(v * 0.45, t + 0.18); g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      o.connect(f); f.connect(g); g.connect(musicBus); o.start(t); o.stop(t + len + 0.05);
+    });
+  }
+  function startPiece(t0) {
+    var p = Classical[clas.pi];
+    clas.voices = p.voices.map(function (v, k) { return { v: v, i: 0, t: t0, bass: k > 0 }; });
+    clas.end = t0 + p.voices[0].reduce(function (s2, n) { return s2 + n[1]; }, 0) * p.unit;
+    if (clas.onPiece && clas.rep === 0) { var delay = Math.max(0, (t0 - ctx.currentTime) * 1000); var cb = clas.onPiece; setTimeout(function () { cb(p); }, delay); }
+  }
+  function schedClassical() {
+    if (!clas || !ctx) return;
+    if (owner && !document.body.contains(owner)) { stopMusic(); return; }
+    var p = Classical[clas.pi], horizon = ctx.currentTime + 0.35;
+    clas.voices.forEach(function (vc) {
+      while (vc.i < vc.v.length && vc.t < horizon) {
+        var n = vc.v[vc.i], d = n[1] * p.unit;
+        if (n[0]) piano(vc.t, n[0], d, vc.bass);
+        vc.t += d; vc.i++;
+      }
+    });
+    if (ctx.currentTime > clas.end - 0.3 && clas.voices.every(function (vc) { return vc.i >= vc.v.length; })) {
+      clas.rep++;
+      if (clas.rep < p.repeat) startPiece(clas.end);
+      else { clas.pi = (clas.pi + 1) % Classical.length; clas.rep = 0; startPiece(clas.end + 1.5); }
+    }
+  }
+  // After every screen change: if no screen on display owns the music, stop it
+  function checkOwner() { if (timer && (!owner || !document.body.contains(owner))) stopMusic(); }
+  function playClassical(ownerEl, onPiece) {
+    if (typeof Classical === 'undefined' || !init()) return;
+    if (clas && timer) { owner = ownerEl; clas.onPiece = onPiece; if (onPiece) onPiece(Classical[clas.pi]); return; }
+    stopMusic(); owner = ownerEl;
+    clas = { pi: Math.floor(Math.random() * Classical.length), rep: 0, onPiece: onPiece };
+    startPiece(ctx.currentTime + 0.25);
+    timer = setInterval(schedClassical, 60);
+  }
   window.addEventListener('pagehide', function () { stopMusic(); if (ctx) ctx.suspend(); });
 
   // ---------- Sound effects ----------
@@ -181,9 +229,13 @@ var Sound = (function () {
     } catch (e) {}
   }
 
-  function setMusic(on) { prefs.music = on; save(); if (ctx) musicBus.gain.setTargetAtTime(on ? 0.22 : 0, ctx.currentTime, 0.05); }
+  // Music volume 0-1 (remembered). 0.8 matches the original loudness.
+  function musicLevel() { var v = prefs.vol === undefined ? 0.8 : prefs.vol; return prefs.music ? 0.28 * v : 0; }
+  function setMusic(on) { prefs.music = on; save(); if (ctx) musicBus.gain.setTargetAtTime(musicLevel(), ctx.currentTime, 0.05); }
+  function setVolume(v) { prefs.vol = Math.max(0, Math.min(1, v)); save(); if (ctx) musicBus.gain.setTargetAtTime(musicLevel(), ctx.currentTime, 0.03); }
+  function getVolume() { return prefs.vol === undefined ? 0.8 : prefs.vol; }
   function setSfx(on) { prefs.sfx = on; save(); if (!on && window.speechSynthesis) speechSynthesis.cancel(); if (ctx) sfxBus.gain.setTargetAtTime(on ? 0.55 : 0, ctx.currentTime, 0.05); }
 
   function state() { return ctx ? { ctx: ctx.state, music: musicBus.gain.value, sfx: sfxBus.gain.value, playing: !!timer } : null; }
-  return { init: init, playMusic: playMusic, stopMusic: stopMusic, play: play, prefs: prefs, setMusic: setMusic, setSfx: setSfx, state: state, say: say, unlockVoice: unlockVoice };
+  return { init: init, playMusic: playMusic, stopMusic: stopMusic, play: play, prefs: prefs, setMusic: setMusic, setSfx: setSfx, state: state, say: say, setVolume: setVolume, getVolume: getVolume, playClassical: playClassical, checkOwner: checkOwner, unlockVoice: unlockVoice };
 })();
