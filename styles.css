@@ -710,3 +710,5 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .touchzone { display: flex; justify-content: center; }
 .arcadecanvas { display: block; border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,0.5); border: 3px solid #2e2270; }
 .touchhint { text-align: center; color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+
+.gamecard.invaders, .bigbtn.invaders { background: linear-gradient(135deg, #3ee08f 0%, #7b3fe4 100%); }
