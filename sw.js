@@ -1,7 +1,7 @@
 /* Offline cache. Bump VERSION on every deploy. */
-var VERSION = 'gn-v1';
+var VERSION = 'gn-v2';
 var FILES = ['./', 'index.html', 'styles.css', 'manifest.json', 'icon-180.png', 'icon-512.png',
-  'js/ui.js', 'js/chess-engine.js', 'js/chess.js', 'js/checkers.js', 'js/sudoku.js', 'js/app.js'];
+  'js/ui.js', 'js/chess-engine.js', 'js/chess.js', 'js/checkers.js', 'js/sudoku.js', 'js/blocks.js', 'js/swap.js', 'js/app.js'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(VERSION).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
 });

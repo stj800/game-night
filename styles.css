@@ -214,3 +214,49 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
   background: #fff; color: #1b1446; padding: 12px 18px; border-radius: 14px; font-weight: 700; z-index: 70;
   box-shadow: 0 10px 30px rgba(0,0,0,0.4); animation: fade 0.2s; max-width: 90vw; text-align: center;
 }
+
+/* New game colors */
+.gamecard.blocks, .bigbtn.blocks { background: linear-gradient(135deg, #00c08b 0%, #3f6ee4 100%); }
+.gamecard.swap, .bigbtn.swap { background: linear-gradient(135deg, #ff4f9a 0%, #ffb03d 100%); }
+.toolbar.two { grid-template-columns: 1fr 1fr; }
+
+/* Block Drop */
+.bdwrap { display: flex; gap: 12px; justify-content: center; align-items: flex-start; }
+.bdcanvas { border-radius: 12px; border: 4px solid #2e2270; box-shadow: 0 14px 40px rgba(0,0,0,0.5); touch-action: none; display: block; }
+.bdside { width: 80px; flex: none; }
+.bdnext { background: rgba(255,255,255,0.06); border-radius: 12px; margin-bottom: 12px; display: block; }
+.bdlabel { font-size: 11px; letter-spacing: 1.4px; color: var(--muted); font-weight: 700; margin-top: 6px; }
+.bdval { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bdctl { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 12px; touch-action: none; }
+.bdctl button { background: rgba(255,255,255,0.12); border-radius: 14px; padding: 14px 0; font-size: 22px; color: #fff; }
+.bdctl button:active { background: rgba(255,255,255,0.28); transform: scale(0.95); }
+
+/* Fruit Swap */
+.fsbar { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; margin-bottom: 8px; }
+.fsmeter { height: 10px; background: rgba(255,255,255,0.1); border-radius: 99px; overflow: hidden; margin-bottom: 12px; }
+.fsmeter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ff4f9a, #ffcf3f); transition: width 0.4s; border-radius: 99px; }
+.fsgrid {
+  display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); aspect-ratio: 1 / 1; width: 100%;
+  background: rgba(255,255,255,0.06); border-radius: 16px; padding: 6px; gap: 3px; touch-action: none; overflow: hidden;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.08);
+}
+.fstile {
+  display: grid; place-items: center; font-size: min(8.4vw, 42px); border-radius: 12px; background: rgba(255,255,255,0.07);
+  min-width: 0; min-height: 0; position: relative; transition: transform 0.15s;
+}
+.fstile.sel { background: rgba(255,207,63,0.45); transform: scale(1.08); }
+.fstile.fall { animation: fsfall 0.3s cubic-bezier(.3,1.4,.6,1) both; }
+@keyframes fsfall { from { transform: translateY(calc(var(--d) * -110%)); } }
+.fstile.pop { animation: fspop 0.24s ease-in forwards; }
+@keyframes fspop { 50% { transform: scale(1.35); } to { transform: scale(0); opacity: 0; } }
+.fstile.nope { animation: fsnope 0.3s; }
+@keyframes fsnope { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+.fstile.hint { animation: fshint 0.6s 3; }
+@keyframes fshint { 50% { transform: scale(1.18) rotate(-8deg); } }
+.fstile.sp-row::after, .fstile.sp-col::after {
+  content: ""; position: absolute; inset: 14%; border-radius: 8px; pointer-events: none;
+  background: repeating-linear-gradient(var(--ang), rgba(255,255,255,0.75) 0 3px, transparent 3px 8px);
+}
+.fstile.sp-row { --ang: 0deg; } .fstile.sp-col { --ang: 90deg; }
+.fstile.sp-star { background: radial-gradient(circle, rgba(255,207,63,0.6), rgba(255,79,154,0.25)); animation: fsglow 1.4s infinite; }
+@keyframes fsglow { 50% { box-shadow: 0 0 14px rgba(255,207,63,0.8); } }

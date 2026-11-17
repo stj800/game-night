@@ -1,0 +1,4 @@
+var S=require('../js/swap.js');
+function allMoves(g){var out=[];for(var r=0;r<8;r++)for(var c=0;c<8;c++)[[r,c+1],[r+1,c]].forEach(function(b){if(b[0]>7||b[1]>7)return;S._swap(g,[r,c],b);var ok=S._runs(g).length>0;S._swap(g,[r,c],b);if(ok)out.push([[r,c],b]);});return out;}
+function game(kinds,moves){var g=S._fresh(kinds),score=0;for(var m=0;m<moves;m++){var ms=allMoves(g);if(!ms.length){g=S._fresh(kinds);continue;}var mv=ms[Math.floor(Math.random()*ms.length)];S._swap(g,mv[0],mv[1]);var combo=1,f=mv;while(true){var st=S._clearStep(g,f,combo);if(!st)break;score+=st.points;S._gravity(g,kinds);f=null;combo++;}}return score;}
+[[5,30],[6,25],[6,20]].forEach(function(p){var a=[];for(var i=0;i<200;i++)a.push(game(p[0],p[1]));a.sort(function(x,y){return x-y});console.log(p, 'p25',a[50],'median',a[100],'p75',a[150]);});

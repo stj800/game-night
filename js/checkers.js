@@ -218,7 +218,7 @@ var Checkers = (function () {
       var ms = myMoves(), winner = !ms.length ? (s.turn === 'r' ? 'b' : 'r') : null;
       var win = winner && (!ai || winner === 'r');
       if (win) UI.confetti();
-      UI.modal({ big: winner ? (win ? '🏆' : '🤖') : '🤝',
+      UI.modal({ big: winner ? (win ? '\uD83C\uDFC6' : '\uD83E\uDD16') : '\uD83E\uDD1D',
         title: winner ? (ai ? (winner === 'r' ? 'You win!' : 'The computer wins') : name(winner) + ' wins!') : 'Draw',
         text: winner ? 'The other side has no moves left.' : '40 moves each with only kings moving and no captures.',
         buttons: [{ label: 'Play again', cls: 'checkers', fn: function () { location.hash = '#/checkers'; } }, { label: 'Look at the board' }] });

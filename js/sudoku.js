@@ -105,7 +105,7 @@ var Sudoku = (function () {
       bar.innerHTML = '';
       bar.appendChild(h('span', { text: 'Mistakes: ' + g.mistakes }));
       bar.appendChild(h('span', { text: 'Hints: ' + g.hints }));
-      bar.appendChild(h('span', { text: '⏱ ' + fmt(g.time) }));
+      bar.appendChild(h('span', { text: '\u23F1 ' + fmt(g.time) }));
     }
 
     function draw() {
@@ -183,7 +183,7 @@ var Sudoku = (function () {
       if (isBest && !g.hints) { bests[g.level] = g.time; UI.store('sd_best', bests); }
       UI.store('sd_game', null);
       UI.confetti();
-      UI.modal({ big: '🎉', title: 'Solved!', text: 'Time ' + fmt(g.time) + ', ' + g.mistakes + (g.mistakes === 1 ? ' mistake, ' : ' mistakes, ') + g.hints + (g.hints === 1 ? ' hint.' : ' hints.') +
+      UI.modal({ big: '\uD83C\uDF89', title: 'Solved!', text: 'Time ' + fmt(g.time) + ', ' + g.mistakes + (g.mistakes === 1 ? ' mistake, ' : ' mistakes, ') + g.hints + (g.hints === 1 ? ' hint.' : ' hints.') +
         (isBest && !g.hints ? ' New best time!' : ''),
         buttons: [{ label: 'Next puzzle', cls: 'sudoku', fn: function () { location.hash = '#/sudoku'; } }, { label: 'Admire it' }] });
     }

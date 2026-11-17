@@ -1,7 +1,7 @@
 {
   "name": "Game Night",
   "short_name": "Game Night",
-  "description": "Chess, checkers and sudoku with tutorials and three levels each.",
+  "description": "Chess, checkers, sudoku, Block Drop and Fruit Swap with tutorials and three levels each.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

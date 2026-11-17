@@ -1,8 +1,8 @@
 /* Chess screens: setup, game, tutorial */
 var Chess = (function () {
   var E = ChessEngine, h = UI.h;
-  var GLYPH = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' };
-  var VS = '︎';
+  var GLYPH = { K: '\u265A', Q: '\u265B', R: '\u265C', B: '\u265D', N: '\u265E', P: '\u265F' };
+  var VS = '\uFE0E';
   var LEVELS = [
     { value: 1, label: 'Beginner', note: 'Plays fast and makes mistakes. Great for learning how the pieces move.' },
     { value: 2, label: 'Intermediate', note: 'Looks two moves ahead and grabs loose pieces. A fair fight.' },
@@ -190,7 +190,7 @@ var Chess = (function () {
       var win = res.kind === 'mate' && (!ai || res.winner === human);
       if (win) UI.confetti();
       UI.modal({
-        big: res.kind === 'mate' ? (win ? '🏆' : '♚') : '🤝',
+        big: res.kind === 'mate' ? (win ? '\uD83C\uDFC6' : '\u265A') : '\uD83E\uDD1D',
         title: res.kind === 'mate' ? (ai ? (res.winner === human ? 'You win!' : 'The computer wins') : nameOf(res.winner) + ' wins!') : 'Draw',
         text: res.kind === 'mate' ? 'Checkmate in ' + Math.ceil(hist.length / 2) + ' moves.' : res.why,
         buttons: [{ label: 'Play again', fn: function () { location.hash = '#/chess'; } }, { label: 'Look at the board' }]
@@ -338,13 +338,13 @@ var Chess = (function () {
     function render() {
       nav.innerHTML = '';
       LESSONS.forEach(function (l, i) {
-        nav.appendChild(h('button', { class: i === cur ? 'on' : '', text: (done[i] ? '✓ ' : '') + (i + 1) + '. ' + l.name,
+        nav.appendChild(h('button', { class: i === cur ? 'on' : '', text: (done[i] ? '\u2713 ' : '') + (i + 1) + '. ' + l.name,
           onclick: function () { load(i); } }));
       });
       textEl.innerHTML = '';
       textEl.appendChild(h('h3', { text: L.title }));
       textEl.appendChild(h('div', { text: L.text }));
-      if (L.goal) textEl.appendChild(h('div', { class: 'goal', text: solved ? '✓ Nice work! Tap Next.' : 'Your turn: ' + L.goal }));
+      if (L.goal) textEl.appendChild(h('div', { class: 'goal', text: solved ? '\u2713 Nice work! Tap Next.' : 'Your turn: ' + L.goal }));
       renderBoard(boardEl, s, { sel: sel, targets: targets, last: last, onTap: tap, epTarget: s.ep,
         goals: (L.goals || []).map(idx) });
       btns.innerHTML = '';
@@ -360,7 +360,7 @@ var Chess = (function () {
     function succeed() {
       solved = true; done[cur] = true; UI.store('chess_lessons', done);
       UI.vibrate(30);
-      UI.toast('✓ Lesson complete!');
+      UI.toast('\u2713 Lesson complete!');
     }
 
     function doMove(m) {
