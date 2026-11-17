@@ -20,7 +20,7 @@ var SwapEngine = (function () {
     { moves: 24, kinds: 5, goals: { nuts: 2 }, layout: ['..n..n..', '........', '........', '........', '........', '........', '........', '........'], tip: 'Bring the acorns down to the bottom row.' },
     { moves: 25, kinds: 5, goals: { crates: 1 }, layout: ['........', '........', '........', 'cccccccc', '........', '........', '........', '........'], tip: 'Make matches next to the crates to break them.' },
     { moves: 40, kinds: 5, goals: { jelly: 1 }, layout: fill('j'), tip: 'Match in an L or T shape for a bomb fruit. It blasts a 3 x 3 area!' },
-    { moves: 25, kinds: 5, goals: { collect: [[2, 20], [3, 20], [4, 20]] }, layout: ['###..###', '##....##', '#......#', '........', '........', '#......#', '##....##', '###..###'], tip: 'Match 5 in a row for a star. Swap it with any fruit!' },
+    { moves: 25, kinds: 5, goals: { boss: { hp: 170, every: 3, spawn: 2, name: 'Wormzilla', icon: 0x1F41B, taunt: 'Munch munch!' } }, layout: FULL, tip: 'BOSS FIGHT! Every fruit you pop hurts Wormzilla. Power-ups hit extra hard. Every few moves it fights back with crates.' },
     // World 2: Tropical Sunset
     { moves: 32, kinds: 5, goals: { jelly: 1 }, layout: ['........', '.jjjjjj.', '.jJJJJj.', '.jJ..Jj.', '.jJ..Jj.', '.jJJJJj.', '.jjjjjj.', '........'], tip: 'Dark jelly takes two hits.' },
     { moves: 32, kinds: 5, goals: { nuts: 3 }, layout: ['.n..n..n', '........', '........', '..c..c..', '........', '........', '........', '........'] },
@@ -29,7 +29,7 @@ var SwapEngine = (function () {
     { moves: 22, kinds: 6, goals: { score: 9000 }, layout: FULL, tip: 'Swap two power-ups together for a giant combo!' },
     { moves: 32, kinds: 5, goals: { jelly: 1 }, layout: ['#.j.j.j#', '.j.j.j.j', 'j.j.j.j.', '.j.j.j.j', 'j.j.j.j.', '.j.j.j.j', 'j.j.j.j.', '#j.j.j.#'] },
     { moves: 34, kinds: 5, goals: { nuts: 3 }, layout: ['n.n..n.n', '........', '#......#', '##....##', '##....##', '#......#', '........', '........'] },
-    { moves: 30, kinds: 6, goals: { crates: 1, jelly: 1 }, layout: ['cc....cc', 'c......c', '..jjjj..', '..jJJj..', '..jJJj..', '..jjjj..', 'c......c', 'cc....cc'] },
+    { moves: 28, kinds: 5, goals: { boss: { hp: 240, every: 3, spawn: 3, name: 'Captain Crab', icon: 0x1F980, taunt: 'Pinch pinch!' } }, layout: ['##....##', '#......#', '........', '........', '........', '........', '#......#', '##....##'], tip: 'BOSS FIGHT! Captain Crab throws three crates at a time. Break them fast.' },
     // World 3: Berry Night
     { moves: 42, kinds: 5, goals: { jelly: 1 }, layout: ['JJJJJJJJ', 'J......J', 'J.jjjj.J', 'J.j##j.J', 'J.j##j.J', 'J.jjjj.J', 'J......J', 'JJJJJJJJ'] },
     { moves: 30, kinds: 6, goals: { collect: [[0, 25], [2, 25]], crates: 1 }, layout: ['........', 'c.c.c.c.', '........', '.c.c.c.c', '........', 'c.c.c.c.', '........', '........'] },
@@ -38,12 +38,13 @@ var SwapEngine = (function () {
     { moves: 42, kinds: 5, goals: { crates: 1 }, layout: ['CCCCCCCC', 'CCCCCCCC', '........', '........', '........', '........', 'CCCCCCCC', 'CCCCCCCC'] },
     { moves: 44, kinds: 5, goals: { jelly: 1, collect: [[1, 20], [4, 20]] }, layout: fill('J') },
     { moves: 36, kinds: 6, goals: { nuts: 4, crates: 1 }, layout: ['nn.nn.nn', '........', 'c.cc.cc.', '........', '.cc.cc.c', '........', '........', '........'] },
-    { moves: 38, kinds: 5, goals: { jelly: 1, crates: 1, score: 12000 }, layout: ['#CjJJjC#', 'CjjJJjjC', 'jj....jj', 'JJ.cc.JJ', 'JJ.cc.JJ', 'jj....jj', 'CjjJJjjC', '#CjJJjC#'], tip: 'The final level. Good luck!' }
+    { moves: 32, kinds: 5, goals: { boss: { hp: 260, every: 2, spawn: 2, name: 'The Midnight Bat', icon: 0x1F987, taunt: 'You will never win!', final: true } }, layout: ['#......#', '........', '........', '...##...', '...##...', '........', '........', '#......#'], tip: 'THE FINAL BOSS! The Midnight Bat strikes every 2 moves. Save your power-ups and combos for this one.' }
   ];
   LEVELS.forEach(function (L, i) {
     L.n = i + 1;
     L.world = i < 8 ? 1 : i < 16 ? 2 : 3;
     var base = L.goals.score || L.moves * 320;
+    L.boss = L.goals.boss || null;
     L.stars = [L.goals.score || 1, Math.round(base * 1.5 / 100) * 100, Math.round(base * 2.2 / 100) * 100];
   });
 
@@ -176,7 +177,9 @@ var SwapEngine = (function () {
       else { st.cells[r][c] = null; cleared.push(pos); }
       stats.points += 60 * (stats.combo || 1);
     });
-    return { cleared: cleared, blasts: blasts, created: creations || [] };
+    var fruitHits = cleared.filter(function (p) { return p.was && p.was.t !== -2; }).length + (creations || []).length;
+    stats.damage = (stats.damage || 0) + fruitHits + blasts.length * 6;
+    return { cleared: cleared, blasts: blasts, created: creations || [], damage: fruitHits + blasts.length * 6 };
   }
 
   function matchStep(st, focus, stats) {
@@ -299,11 +302,23 @@ var SwapEngine = (function () {
     pos.forEach(function (p) { st.cells[p[0]][p[1]] = newFruit(st); });
   }
 
+  // The boss fights back: turns n random fruits into crates
+  function bossAttack(st, n) {
+    var spots = [];
+    for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) { var x = cellAt(st, [r, c]); if (x && x.t >= 0 && !x.sp) spots.push([r, c]); }
+    var out = [];
+    for (var k = 0; k < n && spots.length; k++) {
+      var p = spots.splice(rnd(spots.length), 1)[0];
+      st.cells[p[0]][p[1]] = null; st.crate[p[0]][p[1]] = 1; out.push(p);
+    }
+    return out;
+  }
+
   function jellyLeft(st) { var n = 0; for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) n += st.jelly[r][c]; return n; }
   function cratesLeft(st) { var n = 0; for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) if (st.crate[r][c]) n++; return n; }
 
   return { N: N, LEVELS: LEVELS, create: create, runs: runs, matchStep: matchStep, comboSwap: comboSwap, swap: swap,
     canSwap: canSwap, isValidMove: isValidMove, findMove: findMove, gravity: gravity, collectNuts: collectNuts,
-    shuffle: shuffle, explode: explode, playable: playable, jellyLeft: jellyLeft, cratesLeft: cratesLeft };
+    shuffle: shuffle, explode: explode, bossAttack: bossAttack, playable: playable, jellyLeft: jellyLeft, cratesLeft: cratesLeft };
 })();
 if (typeof module !== 'undefined') module.exports = SwapEngine;

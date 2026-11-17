@@ -130,12 +130,23 @@ var Sound = (function () {
 
   // ---------- Deep announcer voice (the phone's built-in speech, pitched way down) ----------
   var voice = null, voiceUnlocked = false;
+  // Pick the smoothest natural male English voice the device has (Enhanced / Premium versions first).
   function pickVoice() {
     if (voice || !window.speechSynthesis) return voice;
     var vs = speechSynthesis.getVoices().filter(function (v) { return /^en/i.test(v.lang); });
-    var prefer = ['Daniel', 'Arthur', 'Aaron', 'Fred', 'Gordon', 'Rishi', 'Alex', 'Google UK English Male', 'Male', 'David', 'Mark', 'Guy'];
-    for (var i = 0; i < prefer.length && !voice; i++) voice = vs.filter(function (v) { return v.name.indexOf(prefer[i]) >= 0; })[0] || null;
-    return voice || vs[0] || null;
+    var avoid = /Fred|Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Deranged|Good News|Hysterical|Junior|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Ralph|Kathy|Princess|Jester|Grandpa|Rocko|Eddy/i;
+    vs = vs.filter(function (v) { return !avoid.test(v.name); });
+    var male = ['Aaron', 'Arthur', 'Daniel', 'Nathan', 'Evan', 'Reed', 'Tom', 'Alex', 'Oliver', 'Gordon', 'Rishi',
+      'Google UK English Male', 'Microsoft Andrew', 'Microsoft Guy', 'Microsoft Davis', 'Microsoft Christopher', 'Microsoft Eric', 'Microsoft Ryan', 'Microsoft David', 'Male'];
+    function find(test) {
+      for (var i = 0; i < male.length; i++) {
+        var hit = vs.filter(function (v) { return v.name.indexOf(male[i]) >= 0 && test(v); })[0];
+        if (hit) return hit;
+      }
+      return null;
+    }
+    voice = find(function (v) { return /Premium|Enhanced|Natural|Online/i.test(v.name); }) || find(function () { return true; }) || vs[0] || null;
+    return voice;
   }
   if (window.speechSynthesis) speechSynthesis.onvoiceschanged = function () { voice = null; pickVoice(); };
   function unlockVoice() {
@@ -149,7 +160,7 @@ var Sound = (function () {
       speechSynthesis.cancel();
       var u = new SpeechSynthesisUtterance(text);
       var v = pickVoice(); if (v) u.voice = v;
-      u.pitch = 0.1; u.rate = 0.78; u.volume = 1;
+      u.pitch = 0.78; u.rate = 0.9; u.volume = 1; // deep and smooth, not cartoonish
       speechSynthesis.speak(u);
     } catch (e) {}
   }
