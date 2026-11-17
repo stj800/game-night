@@ -1,7 +1,7 @@
 /* Fruit Swap: an original match-3 puzzle */
 var Swap = (function () {
   var h = (typeof UI !== 'undefined') ? UI.h : null, N = 8;
-  var FRUIT = [0x1F353, 0x1F34B, 0x1F347, 0x1F34A, 0x1FAD0, 0x1F34F].map(function (c) { return String.fromCodePoint(c); });
+  var FRUIT = [0x1F353, 0x1F34C, 0x1F347, 0x1F34A, 0x1F349, 0x1F34F].map(function (c) { return String.fromCodePoint(c); });
   var STAR = String.fromCodePoint(0x1F31F);
   var LEVELS = [
     { value: 1, label: 'Beginner', kinds: 5, moves: 30, target: 12000, note: '5 kinds of fruit and 30 moves. Score 12,000 points to win.' },
@@ -10,11 +10,14 @@ var Swap = (function () {
   ];
 
   var THEMES = {
-    1: { key: 'orchard', name: 'Sunny Orchard', song: 'orchard', floaters: [0x1F98B, 0x1F33C, 0x1F338, 0x1F353, 0x1F34F, 0x1FAE7], decor: [0x2601, 0x2601, 0x1F333, 0x1F333] },
-    2: { key: 'tropical', name: 'Tropical Sunset', song: 'tropical', floaters: [0x1FAE7, 0x1F33A, 0x1F34A, 0x1F34B, 0x2728, 0x1F41A], decor: [0x1F334, 0x1F334, 0x2600] },
-    3: { key: 'night', name: 'Berry Night', song: 'night', floaters: [0x2728, 0x2B50, 0x1F347, 0x1FAD0, 0x1F4AB, 0x2728], decor: [0x1F319] }
+    1: { key: 'orchard', name: 'Sunny Orchard', song: 'orchard', decor: [0x2601, 0x2601, 0x1F333, 0x1F333],
+         ground: [0x1F33C, 0x1F337, 0x1F338, 0x1F33C, 0x1F337, 0x1F33B], movers: [{ c: 0x1F98B, k: 'fly' }, { c: 0x1F98B, k: 'fly' }, { c: 0x1F41D, k: 'fly' }] },
+    2: { key: 'tropical', name: 'Tropical Sunset', song: 'tropical', decor: [0x1F334, 0x1F334, 0x2600],
+         ground: [], movers: [{ c: 0x1FAE7, k: 'rise' }, { c: 0x1FAE7, k: 'rise' }, { c: 0x1FAE7, k: 'rise' }, { c: 0x1F99C, k: 'fly' }] },
+    3: { key: 'night', name: 'Berry Night', song: 'night', decor: [0x1F319],
+         ground: [], movers: [{ k: 'firefly' }, { k: 'firefly' }, { k: 'firefly' }, { k: 'shoot' }] }
   };
-  var PARTICLE = ['#ff3b5c', '#ffd23f', '#9b5de5', '#ff8c1a', '#4361ee', '#5fd35f'];
+  var PARTICLE = ['#ff3b5c', '#ffe14d', '#9b5de5', '#ff8c1a', '#ff6f91', '#5fd35f'];
   var CHEERS = ['Juicy!', 'Fresh!', 'Ripe!', 'Fruitastic!', 'Berry good!', 'Smoothie time!'];
   function cp(c) { return String.fromCodePoint(c); }
 
@@ -166,24 +169,50 @@ var Swap = (function () {
     paintToggles();
     var scene = h('div', { class: 'fsscene theme-' + TH.key });
     TH.decor.forEach(function (c, k) { scene.appendChild(h('span', { class: 'decor d' + k, text: cp(c) })); });
+    // Flowers planted along the hills (they sway, they do not float away)
+    TH.ground.forEach(function (c, k) {
+      var fl = h('span', { class: 'groundflower', text: cp(c) });
+      fl.style.left = (6 + k * (88 / Math.max(1, TH.ground.length - 1))) + '%';
+      fl.style.bottom = (1 + (k % 2) * 3 + Math.random() * 2) + '%';
+      fl.style.animationDelay = (Math.random() * 2) + 's';
+      scene.appendChild(fl);
+    });
     if (TH.key === 'night') for (var st = 0; st < 40; st++) { var dot = h('i', { class: 'twinkle' }); dot.style.left = Math.random() * 100 + '%'; dot.style.top = Math.random() * 70 + '%'; dot.style.animationDelay = Math.random() * 3 + 's'; scene.appendChild(dot); }
     root.appendChild(scene);
     var fx = h('div', { class: 'fxlayer' });
     root.appendChild(fx);
     root.appendChild(UI.topbar('Fruit Swap', '#/swap', h('div', { class: 'fstoggles' }, [musicBtn, sfxBtn])));
     var bar = h('div', { class: 'fsbar' }), meter = h('div', { class: 'fsmeter' }, h('i')), gridEl = h('div', { class: 'fsgrid' });
-    // Background life: things drift up the screen all the time
+    // Background life that fits the scene: butterflies and parrots fly across, bubbles rise from the sea,
+    // fireflies blink, the odd shooting star. Kept to a handful at a time so it never gets busy.
     var floatTimer = setInterval(function () {
       if (!document.body.contains(scene)) { clearInterval(floatTimer); Sound.stopMusic(); return; }
-      if (document.hidden) return;
-      var e = h('span', { class: 'floater', text: cp(TH.floaters[Math.floor(Math.random() * TH.floaters.length)]) });
-      e.style.left = (Math.random() * 96) + '%';
-      e.style.fontSize = (16 + Math.random() * 26) + 'px';
-      e.style.animationDuration = (7 + Math.random() * 7) + 's';
-      e.style.setProperty('--sway', (Math.random() * 60 - 30) + 'px');
-      e.addEventListener('animationend', function () { e.remove(); });
+      if (document.hidden || scene.querySelectorAll('.mover').length >= 6) return;
+      var m = TH.movers[Math.floor(Math.random() * TH.movers.length)], e;
+      if (m.k === 'fly') {
+        var ltr = Math.random() < 0.5;
+        e = h('span', { class: 'mover fly' + (ltr ? ' ltr' : ' rtl') }, h('span', { class: 'bob', text: cp(m.c) }));
+        e.style.top = (Math.random() < 0.5 ? 2 + Math.random() * 14 : 74 + Math.random() * 10) + '%'; // open sky above the board or above the hills
+        e.style.fontSize = (22 + Math.random() * 12) + 'px';
+        e.style.animationDuration = (11 + Math.random() * 8) + 's';
+      } else if (m.k === 'rise') {
+        e = h('span', { class: 'mover rise', text: cp(m.c) });
+        e.style.left = (5 + Math.random() * 90) + '%';
+        e.style.fontSize = (12 + Math.random() * 16) + 'px';
+        e.style.animationDuration = (6 + Math.random() * 5) + 's';
+        e.style.setProperty('--sway', (Math.random() * 40 - 20) + 'px');
+      } else if (m.k === 'firefly') {
+        e = h('i', { class: 'mover firefly' });
+        e.style.left = (5 + Math.random() * 90) + '%'; e.style.top = (10 + Math.random() * 80) + '%';
+        e.style.setProperty('--fx', (Math.random() * 80 - 40) + 'px'); e.style.setProperty('--fy', (Math.random() * 60 - 30) + 'px');
+        e.style.animationDuration = (4 + Math.random() * 3) + 's';
+      } else {
+        e = h('i', { class: 'mover shoot' });
+        e.style.left = (20 + Math.random() * 70) + '%'; e.style.top = (3 + Math.random() * 18) + '%';
+      }
+      e.addEventListener('animationend', function (ev) { if (ev.target === e) e.remove(); });
       scene.appendChild(e);
-    }, 650);
+    }, 1400);
     // Browsers only allow sound after a tap, so music starts on the first touch.
     root.addEventListener('pointerdown', function () { Sound.playMusic(TH.song); }, { once: true });
     Sound.playMusic(TH.song);
