@@ -34,7 +34,9 @@ var Blocks = (function () {
       '<p>Every 8 rows you clear, the level goes up and blocks fall faster.</p>' }));
   }
 
-  function play(root) {
+  function play(appRoot) {
+    // One full-screen container: finger gestures work ANYWHERE on the screen, not just on the board
+    var root = h('div', { class: 'arcadescreen' }); appRoot.appendChild(root);
     var cfg = UI.store('bd_cfg') || { level: 1 };
     var L = LEVELS[cfg.level - 1];
     root.appendChild(UI.topbar('Block Drop', '#/blocks', Swap.soundToggles()));
@@ -205,21 +207,35 @@ var Blocks = (function () {
       UI.tbtn('&#10074;&#10074;', 'Pause', function () { if (!over) { paused = !paused; if (paused) Sound.stopMusic(); else Sound.playMusic('blocks', canvas); draw(); } }),
       UI.tbtn('&#10227;', 'Restart', function () { UI.modal({ title: 'Restart?', text: 'Your score resets.', buttons: [{ label: 'Restart', cls: 'blocks', fn: start }, { label: 'Keep playing' }] }); })]));
 
-    // Touch gestures on the board
-    var sx = 0, sy = 0, st = 0, movedCols = 0, dragged = false;
-    canvas.addEventListener('pointerdown', function (e) { e.preventDefault(); sx = e.clientX; sy = e.clientY; st = Date.now(); movedCols = 0; dragged = false; });
-    canvas.addEventListener('pointermove', function (e) {
-      if (!st) return;
-      var cols = Math.round((e.clientX - sx) / cell);
+    // Touch gestures anywhere on the screen (Steve 11/17: thumbs, not arrow buttons):
+    //   drag left/right = slide, drag down slowly = drop faster, quick flick down = drop all the way, tap = turn
+    var sx = 0, sy = 0, st = 0, movedCols = 0, movedRows = 0, dragged = false, pid = null;
+    function isUi(e) { return e.target.closest && e.target.closest('button, a, input'); }
+    root.addEventListener('pointerdown', function (e) {
+      if (isUi(e)) return; e.preventDefault();
+      sx = e.clientX; sy = e.clientY; st = Date.now(); movedCols = 0; movedRows = 0; dragged = false; pid = e.pointerId;
+      try { root.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    root.addEventListener('pointermove', function (e) {
+      if (!st || e.pointerId !== pid) return;
+      e.preventDefault();
+      var step = Math.max(18, cell);
+      var cols = Math.round((e.clientX - sx) / step);
       while (cols > movedCols) { move(1); movedCols++; dragged = true; }
       while (cols < movedCols) { move(-1); movedCols--; dragged = true; }
+      var rows = Math.floor((e.clientY - sy) / step);
+      if (Math.abs(e.clientX - sx) < step && (Date.now() - st) > 180) { while (rows > movedRows) { soft(); movedRows++; dragged = true; } }
     });
-    canvas.addEventListener('pointerup', function (e) {
+    function endTouch(e) {
+      if (!st || e.pointerId !== pid) return;
       var dy = e.clientY - sy, dt = Date.now() - st, dx = e.clientX - sx;
-      if (!dragged && dy > 50 && dy / dt > 0.5) hard();
-      else if (!dragged && Math.abs(dx) < 10 && Math.abs(dy) < 10) turn();
-      st = 0;
-    });
+      if (e.type !== 'pointercancel') {
+        if (!movedRows && !movedCols && dy > 50 && dy / dt > 0.5) hard();
+        else if (!dragged && Math.abs(dx) < 10 && Math.abs(dy) < 10) turn();
+      }
+      st = 0; pid = null;
+    }
+    root.addEventListener('pointerup', endTouch); root.addEventListener('pointercancel', endTouch);
     function onKey(e) {
       if (!document.body.contains(canvas)) { document.removeEventListener('keydown', onKey); return; }
       var k = e.key;

@@ -700,3 +700,13 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 }
 .dragonkite { top: 18%; font-size: 40px; animation: dragonfly 14s linear forwards; filter: drop-shadow(0 0 10px rgba(80,255,160,0.5)); }
 @keyframes dragonfly { 0% { left: -60px; transform: translateY(0); } 25% { transform: translateY(-14px) rotate(-4deg); } 50% { transform: translateY(8px) rotate(3deg); } 75% { transform: translateY(-10px); } 100% { left: calc(100% + 60px); transform: translateY(0); } }
+
+/* ===== Arcade games (Brick Blast, Space Rocks, Block Drop): the whole screen takes finger drags ===== */
+.gamecard.breakout, .bigbtn.breakout { background: linear-gradient(135deg, #ff4f9a 0%, #7b3fe4 100%); }
+.gamecard.rocks, .bigbtn.rocks { background: linear-gradient(135deg, #1f6fd6 0%, #12b6c9 60%, #3ee08f 100%); }
+.arcadescreen { min-height: calc(100vh - 40px); touch-action: none; -webkit-user-select: none; user-select: none; }
+.arcadescreen button { touch-action: manipulation; }
+.arcadebar { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; margin-bottom: 8px; }
+.touchzone { display: flex; justify-content: center; }
+.arcadecanvas { display: block; border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,0.5); border: 3px solid #2e2270; }
+.touchhint { text-align: center; color: var(--muted); font-size: 13px; margin: 10px 0 0; }
