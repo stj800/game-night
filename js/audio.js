@@ -220,6 +220,8 @@ var Sound = (function () {
     win: function (t) { [60, 64, 67, 72, 76, 79, 84].forEach(function (m, k) { tone(sfxBus, t + k * 0.09, m, 0.5, 'square', 0.14, { lp: 3500 }); }); tone(sfxBus, t + 0.7, 84, 1.2, 'triangle', 0.3); },
     lose: function (t) { [67, 64, 60, 55].forEach(function (m, k) { tone(sfxBus, t + k * 0.18, m, 0.4, 'triangle', 0.25); }); }
   };
+  // Gentle bell for Echo pads (a sound effect: follows the Sounds On/Off button)
+  function chime(m, dur) { if (!prefs.sfx || !init()) return; var t0 = ctx.currentTime + 0.01; tone(sfxBus, t0, m, (dur || 0.4) + 0.35, 'sine', 0.4, { attack: 0.005 }); tone(sfxBus, t0, m + 12, dur || 0.4, 'triangle', 0.08, { attack: 0.005 }); }
   function play(name, arg) { if (!prefs.sfx || !init() || !sfx[name]) return; sfx[name](ctx.currentTime + 0.01, arg || 1); }
 
   // ---------- Deep announcer voice (the phone's built-in speech, pitched way down) ----------
@@ -272,5 +274,5 @@ var Sound = (function () {
   function setSfx(on) { prefs.sfx = on; save(); if (ctx) { sfxBus.gain.cancelScheduledValues(ctx.currentTime); sfxBus.gain.setValueAtTime(on ? 0.55 : 0, ctx.currentTime); } if (!on && window.speechSynthesis) speechSynthesis.cancel(); if (ctx) sfxBus.gain.setTargetAtTime(on ? 0.55 : 0, ctx.currentTime, 0.05); }
 
   function state() { return ctx ? { ctx: ctx.state, music: musicBus.gain.value, sfx: sfxBus.gain.value, playing: !!timer } : null; }
-  return { init: init, playMusic: playMusic, stopMusic: stopMusic, play: play, prefs: prefs, setMusic: setMusic, setSfx: setSfx, state: state, say: say, setVolume: setVolume, getVolume: getVolume, playClassical: playClassical, checkOwner: checkOwner, unlockVoice: unlockVoice };
+  return { init: init, playMusic: playMusic, stopMusic: stopMusic, play: play, prefs: prefs, setMusic: setMusic, setSfx: setSfx, state: state, chime: chime, say: say, setVolume: setVolume, getVolume: getVolume, playClassical: playClassical, checkOwner: checkOwner, unlockVoice: unlockVoice };
 })();

@@ -14,7 +14,7 @@
     root.appendChild(h('div', { class: 'hero' }, [
       h('img', { class: 'logo', src: 'icon-180.png', alt: '', width: 84, height: 84 }),
       h('h1', { text: 'Game Night' }),
-      h('p', { text: 'Nine games. Three levels each. Beat the computer, clear the board.' })
+      h('p', { text: 'Eleven games. Three levels each. Beat the computer, clear the board.' })
     ]));
     var cards = h('div', { class: 'gamecards' });
     [
@@ -24,6 +24,8 @@
       { id: 'blocks', glyph: String.fromCharCode(0x25A6), name: 'Block Drop', desc: 'Stack falling blocks and clear rows' },
       { id: 'swap', glyph: String.fromCodePoint(0x1F353), name: 'Fruit Swap', desc: 'Match 3 fruits, set off combos' },
       { id: 'mahjong', glyph: String.fromCodePoint(0x1F004), name: 'Mahjong', desc: 'Match tile pairs, with a step-by-step lesson' },
+      { id: 'memory', glyph: String.fromCodePoint(0x1F9E0), name: 'Memory Match', desc: 'Flip cards, find the pairs. Keeps memory sharp' },
+      { id: 'echo', glyph: String.fromCodePoint(0x1F3B5), name: 'Echo', desc: 'Repeat the light-and-tone pattern. Each round adds one' },
       { id: 'breakout', glyph: String.fromCodePoint(0x1F9F1), name: 'Brick Blast', desc: 'Smash the bricks. Your finger is the paddle' },
       { id: 'rocks', glyph: String.fromCodePoint(0x1F680), name: 'Space Rocks', desc: 'Touch to steer, blast the rocks' },
       { id: 'invaders', glyph: String.fromCodePoint(0x1F47E), name: 'Galaxy Guard', desc: 'Stop the marching alien fleet' }
@@ -50,6 +52,7 @@
     'checkers': Checkers.setup, 'checkers/play': Checkers.play, 'checkers/learn': Checkers.learn,
     'sudoku': Sudoku.setup, 'sudoku/play': Sudoku.play, 'sudoku/learn': Sudoku.learn,
     'mahjong': Mahjong.setup, 'mahjong/play': Mahjong.play, 'mahjong/learn': Mahjong.learn,
+    'memory': MemoryMatch.setup, 'memory/play': MemoryMatch.play, 'echo': Echo.setup, 'echo/play': Echo.play,
     'invaders': Invaders.setup, 'invaders/play': Invaders.play,
     'breakout': Breakout.setup, 'breakout/play': Breakout.play, 'rocks': Rocks.setup, 'rocks/play': Rocks.play,
     'blocks': Blocks.setup, 'blocks/play': Blocks.play, 'swap': Swap.setup, 'swap/play': Swap.play
