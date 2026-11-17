@@ -104,7 +104,7 @@ var RummyEngine = (function () {
 
   // opts: { names: [...], target: 500, teams: bool, level: 1-3 }
   function newGame(opts) {
-    var s = { target: opts.target || 500, teams: !!opts.teams, deal: opts.deal || 0, level: opts.level || 2, round: 0, dealer: opts.names.length - 1,
+    var s = { gid: Math.random().toString(36).slice(2, 8), target: opts.target || 500, teams: !!opts.teams, deal: opts.deal || 0, level: opts.level || 2, round: 0, dealer: opts.names.length - 1,
       players: opts.names.map(function (n, i) { return { name: n, score: 0, hand: [], table: 0, team: opts.teams ? i % 2 : i }; }),
       history: [] };
     deal(s, opts.rnd);

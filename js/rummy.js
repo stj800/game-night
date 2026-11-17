@@ -1,4 +1,6 @@
-/* Rummy 500: you against 1-3 computer players, or 2 vs 2 teams with a partner across the table. */
+/* Rummy 500: you against 1-3 computer players, 2 vs 2 teams, or ONLINE with family on their own phones.
+   Online: the host's phone runs the game (the "driver") and sends each player only their own hand.
+   Phones connect directly through the free PeerJS service (no account needed). */
 var Rummy = (function () {
   var h = UI.h, E = RummyEngine;
   var LEVELS = [
@@ -6,49 +8,325 @@ var Rummy = (function () {
     { value: 2, label: 'Intermediate', note: 'Solid players. They dig into the discard pile when it pays.' },
     { value: 3, label: 'Advanced', note: 'Sharp players. They watch what you can lay off and hold it back.' }
   ];
-  var BOTS = [{ n: 'Ava', a: 0x1F469 }, { n: 'Leo', a: 0x1F468 }, { n: 'Mia', a: 0x1F467 }];
+  var BOTS = ['Ava', 'Leo', 'Mia'];
+  var AV = [0x1F60E, 0x1F469, 0x1F468, 0x1F467];
   var COLORS = ['#ffcf3f', '#ff6b8b', '#3ee08f', '#5fb6ff'];
+  var PEERJS = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js', PREFIX = 'gamenight-rummy-';
   function cp(c) { return String.fromCodePoint(c); }
+  function cfgGet() { var c = UI.store('rum_cfg') || {}; return { mode: c.mode || '1', target: c.target || 500, level: c.level || 1, deal: c.deal || 0 }; }
+  function seatCount(mode) { return mode === 'team' ? 4 : +mode + 1; }
 
+  // =================== Driver: owns the real game (local play, or the online host) ===================
+  var D = null, onUpdate = null;
+  function newDriver(s, seats, mode) { if (D) D.alive = false; D = { s: s, seats: seats, mode: mode, alive: true, msg: '', busy: false }; return D; }
+  function pname(i) { return D.s.players[i].name; }
+  function save() {
+    if (!D) return;
+    if (D.mode === 'local') UI.store('rum_game', D.s);
+    else UI.store('rum_net', { s: D.s, code: N.code, seats: D.seats.map(function (st) { return { name: st.name, kind: st.kind }; }) });
+  }
+  function seatInfo() {
+    return D.seats.map(function (st) { return { name: st.name, kind: st.kind, on: st.kind !== 'remote' || !!(st.conn && st.conn.open) }; });
+  }
+  function viewFor(i) {
+    var v = JSON.parse(JSON.stringify(D.s));
+    v.players.forEach(function (p, k) { if (k !== i) p.hand = p.hand.map(function () { return -1; }); });
+    v.stock = v.stock.map(function () { return -1; });
+    return v;
+  }
+  function publish() {
+    if (!D) return;
+    if (D.mode === 'host') D.seats.forEach(function (st, i) {
+      if (st.kind === 'remote' && st.conn && st.conn.open) send(st.conn, { t: 'state', v: viewFor(i), seat: i, msg: D.msg, info: seatInfo(), code: N.code });
+    });
+    if (onUpdate) onUpdate();
+  }
+  function roundHead(s) {
+    var r = s.result; if (!r) return '';
+    return r.how === 'out' ? s.players[r.by].name + ' went out!' : 'The deck ran out.';
+  }
+  function commit(msg) {
+    if (D.s.phase === 'over' || D.s.phase === 'gameover') msg += ' ' + roundHead(D.s);
+    D.msg = msg; save(); publish();
+    var d = D; setTimeout(function () { if (d === D) runBots(); }, 1100);
+  }
+  // Apply a move for a seat. Returns an error message, or null when it worked.
+  function apply(seat, a, x) {
+    var s = D.s, msg, who = pname(seat);
+    if (a === 'next') {
+      if (s.phase !== 'over') return null;
+      E.nextRound(s); msg = 'Hand ' + s.round + ' is dealt. ' + pname(s.turn) + ' goes first.';
+    } else if (a === 'again') {
+      if (s.phase !== 'gameover') return null;
+      if (D.mode === 'host' && seat !== 0) return 'Only the host can start a new game.';
+      D.s = s = E.newGame({ names: s.players.map(function (p) { return p.name; }), target: s.target, teams: s.teams, level: s.level, deal: s.deal });
+      msg = 'New game! ' + pname(s.turn) + ' goes first.';
+    } else {
+      if (s.turn !== seat || (s.phase !== 'draw' && s.phase !== 'play')) return 'Hang on, it is not your turn.';
+      if (a === 'stock') { if (E.drawStock(s) === null) return 'You already drew.'; msg = who + ' drew from the deck.'; }
+      else if (a === 'pile') {
+        var r = E.drawDiscard(s, x);
+        if (!r.ok) return r.why === 'unusable' ? 'You can only take that card if you can play it right away.' : 'You already drew.';
+        msg = who + ' took ' + (r.picked.length === 1 ? 'the ' + E.label(r.picked[0]) : r.picked.length + ' cards from the pile') + '.';
+      }
+      else if (a === 'meld') { var m = E.meld(s, x); if (!m) return 'Those cards do not make a meld.'; msg = who + ' melded ' + m.cards.map(E.label).join(' ') + ' (+' + m.pts + ').'; }
+      else if (a === 'layoff') { if (!E.layOff(s, x[0], x[1])) return 'That card does not fit there.'; msg = who + ' laid off the ' + E.label(x[0]) + '.'; }
+      else if (a === 'discard') {
+        if (!E.canDiscard(s, x)) return s.mustUse !== null ? 'Play the ' + E.label(s.mustUse) + ' first.' : 'You cannot throw back the card you just took.';
+        E.discard(s, x); msg = who + ' threw the ' + E.label(x) + '.';
+      }
+      else return 'Unknown move.';
+    }
+    commit(msg);
+    return null;
+  }
+  // Computer plays a seat (a computer seat, or an online player who has been gone 45+ seconds)
+  function runBots() {
+    var d = D; if (!d || !d.alive || d.busy) return;
+    var s = d.s; if (s.phase !== 'draw') return;
+    var st = d.seats[s.turn], away = st.kind === 'remote' && !(st.conn && st.conn.open);
+    if (away && Date.now() - (st.awayAt || 0) < 45000) { setTimeout(function () { if (d === D) runBots(); }, 3000); return; }
+    if (st.kind !== 'bot' && !away) return;
+    d.busy = true;
+    var seat = s.turn, who = pname(seat) + (away ? ' (computer filling in)' : '');
+    d.msg = who + ' is thinking...'; publish();
+    setTimeout(function () {
+      if (!d.alive || d !== D) return;
+      var dr = E.aiDraw(s);
+      if (dr.from === 'stock') { E.drawStock(s); d.msg = who + ' drew from the deck.'; }
+      else { var r = E.drawDiscard(s, dr.index); d.msg = who + ' took ' + (r.picked.length === 1 ? 'the ' + E.label(r.picked[0]) : r.picked.length + ' cards from the pile') + '.'; }
+      publish();
+      setTimeout(function () {
+        if (!d.alive || d !== D) return;
+        var lines = [];
+        E.aiPlay(s).forEach(function (a) {
+          if (a.t === 'meld') lines.push('melded ' + a.cards.map(E.label).join(' '));
+          if (a.t === 'layoff') lines.push('laid off the ' + E.label(a.card));
+          if (a.t === 'discard') lines.push('threw the ' + E.label(a.card));
+        });
+        d.busy = false;
+        commit(who + ' ' + (lines.join(', ') || 'played') + '.');
+      }, 900);
+    }, 800);
+  }
+
+  // =================== Network (PeerJS) ===================
+  var N = { peer: null, role: null, code: null, conn: null, lobby: null, view: null, seat: 0, info: null, msg: '', name: '', status: '' };
+  function send(conn, o) { try { if (conn && conn.open) conn.send(o); } catch (e) {} }
+  function refresh() { if (onUpdate) onUpdate(); }
+  function newCode() { var A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', c = ''; for (var i = 0; i < 4; i++) c += A[Math.floor(Math.random() * A.length)]; return c; }
+  function cleanName(n) { n = String(n || '').replace(/[^A-Za-z0-9 '.-]/g, '').trim().slice(0, 14); return n || 'Player'; }
+  function loadPeer(cb) {
+    if (window.Peer) return cb();
+    var sc = document.createElement('script'); sc.src = PEERJS; sc.onload = cb;
+    sc.onerror = function () { N.status = 'Could not reach the internet. Check your connection and try again.'; refresh(); };
+    document.head.appendChild(sc);
+  }
+  function closeNet() {
+    if (N.role === 'client' && N.conn) send(N.conn, { t: 'bye' });
+    if (N.peer) { try { N.peer.destroy(); } catch (e) {} }
+    N.peer = null; N.conn = null; N.role = null; N.lobby = null; N.view = null; N.status = '';
+    if (D && D.mode === 'host') { D.alive = false; D = null; }
+  }
+  function leaveOnline() { closeNet(); UI.store('rum_net', null); }
+
+  // ---- host ----
+  function fillOrder(n, teams) { return teams ? [2, 1, 3] : [1, 2, 3].slice(0, n - 1); }
+  function hostLobby(name) {
+    closeNet();
+    var cfg = cfgGet(), n = seatCount(cfg.mode), seats = [{ name: name, kind: 'me' }];
+    for (var i = 1; i < n; i++) seats.push({ name: '', kind: 'open' });
+    N.role = 'host'; N.code = newCode(); N.lobby = { cfg: cfg, seats: seats }; N.status = 'Opening a table...';
+    openHost(false);
+  }
+  function hostResume() {
+    var saved = UI.store('rum_net'); if (!saved) return false;
+    closeNet();
+    N.role = 'host'; N.code = saved.code; N.status = 'Reopening your table...';
+    var seats = saved.seats.map(function (st) { return { name: st.name, kind: st.kind, conn: null, awayAt: Date.now() }; });
+    newDriver(saved.s, seats, 'host'); D.msg = 'Welcome back. Waiting for players to reconnect.';
+    openHost(true);
+    return true;
+  }
+  function openHost(resume) {
+    var tries = 0;
+    loadPeer(function () {
+      (function open() {
+        if (N.role !== 'host') return;
+        var p = new Peer(PREFIX + N.code); N.peer = p;
+        p.on('open', function () { N.status = ''; refresh(); if (D && D.mode === 'host') runBots(); });
+        p.on('error', function (e) {
+          if (e.type === 'unavailable-id') {
+            try { p.destroy(); } catch (x) {}
+            if (resume && tries++ < 15) { N.status = 'Reopening your table (code ' + N.code + ')...'; refresh(); setTimeout(open, 3000); }
+            else { N.code = newCode(); open(); }
+          } else if (e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error') { N.status = 'Connection trouble. Retrying...'; refresh(); }
+        });
+        p.on('disconnected', function () { setTimeout(function () { try { if (!p.destroyed) p.reconnect(); } catch (x) {} }, 1500); });
+        p.on('connection', function (conn) {
+          conn.on('data', function (d) { hostRecv(conn, d); });
+          conn.on('close', function () { hostDrop(conn); });
+          conn.on('error', function () { hostDrop(conn); });
+        });
+      })();
+    });
+  }
+  function lobbyBroadcast() {
+    var L = N.lobby; if (!L) return;
+    L.seats.forEach(function (st, i) { if (st.kind === 'remote') send(st.conn, { t: 'lobby', seats: L.seats.map(function (x) { return { name: x.name, kind: x.kind }; }), cfg: L.cfg, seat: i, code: N.code }); });
+    refresh();
+  }
+  function hostRecv(conn, d) {
+    if (!d || typeof d !== 'object') return;
+    if (d.t === 'hello') {
+      var nm = cleanName(d.name), i;
+      if (D && D.mode === 'host') {
+        var seats = D.seats, low = nm.toLowerCase();
+        i = seats.findIndex(function (st) { return st.kind === 'remote' && st.name.toLowerCase() === low; });
+        if (i < 0) i = seats.findIndex(function (st) { return st.kind === 'bot'; }); // take over a computer seat
+        if (i < 0) { send(conn, { t: 'full' }); return; }
+        var back = seats[i].kind === 'remote';
+        if (seats[i].conn && seats[i].conn !== conn) { try { seats[i].conn.close(); } catch (e) {} }
+        seats[i].kind = 'remote'; seats[i].conn = conn; seats[i].name = nm; D.s.players[i].name = nm; conn.seat = i;
+        D.msg = nm + (back ? ' is back.' : ' joined and took over a computer seat.'); save(); publish(); runBots();
+        return;
+      }
+      if (N.lobby) {
+        var L = N.lobby;
+        i = L.seats.findIndex(function (st) { return st.kind === 'remote' && st.name.toLowerCase() === nm.toLowerCase(); });
+        if (i < 0) i = fillOrder(L.seats.length, L.cfg.mode === 'team').filter(function (k) { return L.seats[k] && L.seats[k].kind === 'open'; })[0];
+        if (i === undefined || i < 0) { send(conn, { t: 'full' }); return; }
+        L.seats[i] = { name: nm, kind: 'remote', conn: conn }; conn.seat = i;
+        lobbyBroadcast();
+      }
+    } else if (d.t === 'act') {
+      if (conn.seat === undefined || !D || D.mode !== 'host' || D.seats[conn.seat].conn !== conn) return;
+      var err = apply(conn.seat, d.a, d.x);
+      if (err) send(conn, { t: 'err', msg: err });
+    } else if (d.t === 'bye') { hostDrop(conn, true); }
+  }
+  function hostDrop(conn, left) {
+    var i = conn.seat; if (i === undefined) return;
+    if (D && D.mode === 'host') {
+      var st = D.seats[i]; if (st.conn !== conn) return;
+      st.conn = null; st.awayAt = Date.now();
+      D.msg = st.name + (left ? ' left the game. A computer will play for them.' : ' lost connection. Waiting a moment for them to come back.');
+      if (left) st.awayAt = 0;
+      publish(); runBots();
+    } else if (N.lobby && N.lobby.seats[i] && N.lobby.seats[i].conn === conn) {
+      N.lobby.seats[i] = { name: '', kind: 'open' }; lobbyBroadcast();
+    }
+  }
+  function hostStart() {
+    var L = N.lobby; if (!L) return;
+    var used = {}; L.seats.forEach(function (st) { if (st.name) used[st.name.toLowerCase()] = 1; });
+    var seats = L.seats.map(function (st, i) {
+      if (st.kind !== 'open') return { name: st.name, kind: st.kind, conn: st.conn || null };
+      var nm = BOTS[i - 1]; if (used[nm.toLowerCase()]) nm = nm + ' (cpu)';
+      return { name: nm, kind: 'bot', conn: null };
+    });
+    var s = E.newGame({ names: seats.map(function (st) { return st.name; }), target: L.cfg.target, teams: L.cfg.mode === 'team', level: L.cfg.level, deal: L.cfg.deal });
+    N.lobby = null;
+    newDriver(s, seats, 'host');
+    commit('Game on! ' + pname(s.turn) + ' goes first.');
+    location.hash = '#/rummy/online';
+  }
+
+  // ---- client ----
+  function join(code, name) {
+    closeNet();
+    N.role = 'client'; N.code = code.toUpperCase().replace(/[^A-Z0-9]/g, ''); N.name = cleanName(name); N.status = 'Connecting...';
+    refresh();
+    loadPeer(function () {
+      if (N.role !== 'client') return;
+      var p = new Peer(); N.peer = p;
+      p.on('open', connect);
+      p.on('error', function (e) {
+        if (e.type === 'peer-unavailable') {
+          if (N.view) { N.status = 'Host is away. Retrying...'; refresh(); setTimeout(function () { if (N.role === 'client' && !(N.conn && N.conn.open)) connect(); }, 4000); }
+          else { N.status = 'No game found with code ' + N.code + '. Check the code, and make sure the host has the Rummy game open.'; refresh(); }
+        } else if (e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error') { N.status = 'Connection trouble. Retrying...'; refresh(); }
+      });
+      p.on('disconnected', function () { setTimeout(function () { try { if (!p.destroyed) p.reconnect(); } catch (x) {} }, 1500); });
+    });
+  }
+  function connect() {
+    if (N.role !== 'client' || !N.peer) return;
+    var c = N.peer.connect(PREFIX + N.code, { reliable: true }); N.conn = c;
+    c.on('open', function () { N.status = ''; send(c, { t: 'hello', name: N.name }); refresh(); });
+    c.on('data', clientRecv);
+    c.on('close', function () {
+      if (N.role !== 'client' || N.conn !== c) return;
+      N.status = 'Connection lost. Reconnecting...'; refresh();
+      setTimeout(function () { if (N.role === 'client' && N.conn === c) connect(); }, 2500);
+    });
+  }
+  function clientRecv(d) {
+    if (!d || typeof d !== 'object') return;
+    if (d.t === 'lobby') { N.lobby = d; N.seat = d.seat; refresh(); }
+    else if (d.t === 'state') {
+      N.view = d.v; N.seat = d.seat; N.info = d.info; N.msg = d.msg; N.lobby = null; N.status = '';
+      if (location.hash.indexOf('#/rummy') === 0 && location.hash !== '#/rummy/online') location.hash = '#/rummy/online';
+      else refresh();
+    }
+    else if (d.t === 'err') UI.toast(d.msg);
+    else if (d.t === 'full') { N.status = 'That game is full.'; refresh(); }
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible' || !N.peer) return;
+    try { if (N.peer.disconnected && !N.peer.destroyed) N.peer.reconnect(); } catch (e) {}
+    if (N.role === 'client' && !(N.conn && N.conn.open)) setTimeout(connect, 800);
+  });
+
+  // =================== Screens ===================
   function setup(root) {
-    var cfg = UI.store('rum_cfg') || { mode: '1', target: 500, level: 1 };
+    var cfg = cfgGet();
     root.appendChild(UI.topbar('Rummy 500', '#/'));
     var saved = UI.store('rum_game');
-    if (saved && saved.phase !== 'gameover') {
+    if (N.role === 'client' && N.view) root.appendChild(h('button', { class: 'bigbtn rummy', text: 'Back to your online game', onclick: function () { location.hash = '#/rummy/online'; } }));
+    else if (N.role === 'host' && D && D.mode === 'host') root.appendChild(h('button', { class: 'bigbtn rummy', text: 'Back to your online game (code ' + N.code + ')', onclick: function () { location.hash = '#/rummy/online'; } }));
+    else if (saved && saved.phase !== 'gameover') {
       var sd = E.sides(saved);
-      root.appendChild(h('button', { class: 'bigbtn rummy', text: 'Continue game (' + sideName(saved, 0) + ' ' + sd[0].score + ', hand ' + saved.round + ')',
+      root.appendChild(h('button', { class: 'bigbtn rummy', text: 'Continue game (' + sideName(saved, 0, 0) + ' ' + sd[0].score + ', hand ' + saved.round + ')',
         onclick: function () { location.hash = '#/rummy/play'; } }));
     }
-    var noteEl = h('p', { class: 'levelnote' });
+    var noteEl = h('p', { class: 'levelnote' }), dealNote = h('p', { class: 'levelnote' });
+    function setDeal() {
+      var n = seatCount(cfg.mode), std = n === 2 ? 13 : 7, d = cfg.deal ? Math.min(cfg.deal, n === 2 ? 13 : n === 3 ? 10 : 7) : std;
+      dealNote.textContent = (cfg.deal ? d + ' cards each.' : 'Standard: ' + std + ' cards each (13 with 2 players, 7 with 3 or 4).') +
+        (d <= 7 ? ' Fewer cards = faster, lighter hands.' : ' More cards = more melds, bigger swings.') +
+        (cfg.deal && d < cfg.deal ? ' (Capped so the deck does not run dry: 3 players max 10, 4 players 7.)' : '');
+    }
+    function keep() { UI.store('rum_cfg', cfg); }
     root.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Players' }), UI.seg([
       { value: '1', label: 'You + 1' }, { value: '2', label: 'You + 2' }, { value: '3', label: 'You + 3' }, { value: 'team', label: 'Teams 2v2' }
-    ], cfg.mode, function (v) { cfg.mode = v; }),
-      h('p', { class: 'levelnote', text: 'Teams: you and a computer partner sit across from each other and share one score against two computers.' })]));
+    ], cfg.mode, function (v) { cfg.mode = v; setDeal(); keep(); }),
+      h('p', { class: 'levelnote', text: 'Teams: you and your partner sit across from each other and share one score. Online, your partner can be a real person.' })]));
     root.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Play to' }), UI.seg([
       { value: 200, label: '200' }, { value: 300, label: '300' }, { value: 400, label: '400' }, { value: 500, label: '500' }
-    ], cfg.target, function (v) { cfg.target = v; }), h('p', { class: 'levelnote', text: '200 is a quick game (a few hands). 500 is the classic.' })]));
-    var dealNote = h('p', { class: 'levelnote' });
-    function setDeal() {
-      var n = cfg.mode === 'team' ? 4 : +cfg.mode + 1, std = n === 2 ? 13 : 7, d = cfg.deal ? Math.min(cfg.deal, n === 2 ? 13 : n === 3 ? 10 : 7) : std;
-      dealNote.textContent = (cfg.deal ? d + ' cards each.' : 'Standard: ' + std + ' cards each (13 with 2 players, 7 with 3 or 4).') +
-        (d <= 7 ? ' Fewer cards = faster, lighter hands.' : ' More cards = more melds, bigger swings.') + (cfg.deal && d < cfg.deal ? ' (Capped so the deck does not run dry: 3 players max 10, 4 players 7.)' : '');
-    }
+    ], cfg.target, function (v) { cfg.target = v; keep(); }), h('p', { class: 'levelnote', text: '200 is a quick game (a few hands). 500 is the classic.' })]));
     root.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Cards dealt' }), UI.seg([
       { value: 0, label: 'Standard' }, { value: 7, label: '7' }, { value: 10, label: '10' }, { value: 13, label: '13' }
-    ], cfg.deal || 0, function (v) { cfg.deal = v; setDeal(); }), dealNote]));
-    setDeal();
-    Array.prototype.forEach.call(root.querySelector('.panel .seg').children, function (b) { b.addEventListener('click', function () { setTimeout(setDeal, 0); }); });
+    ], cfg.deal || 0, function (v) { cfg.deal = v; setDeal(); keep(); }), dealNote]));
     function setNote() { noteEl.textContent = LEVELS[cfg.level - 1].note; }
-    root.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Level' }), UI.seg(LEVELS, cfg.level, function (v) { cfg.level = v; setNote(); }), noteEl]));
-    setNote();
-    root.appendChild(h('button', { class: saved && saved.phase !== 'gameover' ? 'ghostbtn' : 'bigbtn rummy', text: 'New game', onclick: function () {
-      UI.store('rum_cfg', cfg);
-      var names = ['You'], teams = cfg.mode === 'team', n = teams ? 3 : +cfg.mode;
-      for (var i = 0; i < n; i++) names.push(BOTS[i].n);
-      if (teams) names = ['You', BOTS[0].n, BOTS[1].n, BOTS[2].n]; // seat 2 (Leo) is your partner
+    root.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Computer level' }), UI.seg(LEVELS, cfg.level, function (v) { cfg.level = v; setNote(); keep(); }), noteEl]));
+    setNote(); setDeal();
+    root.appendChild(h('button', { class: 'bigbtn rummy', text: 'Play on this phone', onclick: function () {
+      keep();
+      var teams = cfg.mode === 'team', n = seatCount(cfg.mode), names = ['You'];
+      for (var i = 1; i < n; i++) names.push(BOTS[i - 1]);
       UI.store('rum_game', E.newGame({ names: names, target: cfg.target, teams: teams, level: cfg.level, deal: cfg.deal || 0 }));
       location.hash = '#/rummy/play';
     } }));
+    root.appendChild(h('div', { class: 'panel' }, [
+      h('h3', { text: 'Play online with family' }),
+      h('p', { class: 'levelnote', style: 'margin-top:0', text: 'Each person plays on their own phone. One person hosts and gets a 4-letter code; everyone else taps Join and types it in. Empty seats are filled by computers.' }),
+      h('div', { class: 'rumtwo' }, [
+        h('button', { class: 'bigbtn rummy', text: 'Host a game', onclick: function () { keep(); location.hash = '#/rummy/host'; } }),
+        h('button', { class: 'bigbtn rummyalt', text: 'Join a game', onclick: function () { location.hash = '#/rummy/join'; } })
+      ]),
+      UI.store('rum_net') && !(N.role === 'host' && D) ? h('button', { class: 'ghostbtn', text: 'Reopen my last online table', onclick: function () { hostResume(); location.hash = '#/rummy/online'; } }) : null
+    ]));
     root.appendChild(h('div', { class: 'rules', html:
       '<h3>The goal</h3><p>Score points by laying cards on the table in <b>melds</b>. First to the target score wins.</p>' +
       '<h3>Melds</h3><ul><li><b>Set:</b> 3 or 4 cards of the same rank (7 7 7).</li><li><b>Run:</b> 3 or more in a row, same suit (4 5 6 of hearts). Aces go low (A 2 3) or high (Q K A), not around the corner.</li></ul>' +
@@ -59,11 +337,88 @@ var Rummy = (function () {
       '<h3>Tips</h3><ul><li>Lay down melds early so you are not caught with points in your hand.</li><li>A big discard pile can be a gold mine, but every extra card you pick up counts against you if you get stuck with it.</li><li>Do not throw a card the next player can lay off.</li></ul>' }));
   }
 
-  function sideName(s, k) {
-    if (!s.teams) return s.players[k].name;
-    return k === s.players[0].team ? 'Your team' : 'Their team';
+  function nameInput() {
+    var inp = h('input', { class: 'ruminput', type: 'text', maxlength: 14, placeholder: 'Your name', value: UI.store('rum_name') || '', autocomplete: 'off' });
+    inp.addEventListener('input', function () { UI.store('rum_name', inp.value); });
+    return inp;
+  }
+  function seatList(seats, teams, mySeat) {
+    var box = h('div', { class: 'rumseats' });
+    seats.forEach(function (st, i) {
+      var label = st.kind === 'open' ? 'Open seat (a computer plays if nobody joins)' : st.name + (i === mySeat ? ' (you)' : '') + (i === 0 ? ' \u00B7 host' : '');
+      var tag = teams ? (i % 2 === 0 ? 'Team 1' : 'Team 2') : 'Seat ' + (i + 1);
+      box.appendChild(h('div', { class: 'rumseat' + (st.kind === 'open' ? ' open' : ''), style: '--c:' + COLORS[i] }, [h('b', { text: tag }), h('span', { text: label })]));
+    });
+    return box;
   }
 
+  function hostScreen(root) {
+    root.appendChild(UI.topbar('Host online', '#/rummy'));
+    if (D && D.mode === 'host' && N.role === 'host') { location.hash = '#/rummy/online'; return; }
+    var body = h('div'); root.appendChild(body);
+    function draw() {
+      body.innerHTML = '';
+      if (N.role !== 'host' || !N.lobby) {
+        var inp = nameInput();
+        body.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Your name' }), inp]));
+        var c = cfgGet();
+        body.appendChild(h('p', { class: 'levelnote', text: (c.mode === 'team' ? 'Teams 2v2' : seatCount(c.mode) + ' players') + ', play to ' + c.target + '. Change these on the Rummy menu.' }));
+        body.appendChild(h('button', { class: 'bigbtn rummy', text: 'Open my table', onclick: function () {
+          if (!inp.value.trim()) { UI.toast('Type your name first.'); inp.focus(); return; }
+          hostLobby(cleanName(inp.value)); draw();
+        } }));
+        return;
+      }
+      var L = N.lobby;
+      body.appendChild(h('div', { class: 'panel rumcodebox' }, [
+        h('h3', { text: 'Game code' }),
+        h('div', { class: 'rumcode', text: N.status && !N.peer ? '....' : N.code }),
+        h('p', { class: 'levelnote', text: N.status || 'Tell your family this code. They open Game Night, tap Rummy 500, then Join a game.' }),
+        h('button', { class: 'ghostbtn', text: '\uD83D\uDCE4 Send the code', onclick: function () {
+          var t = 'Join my Rummy 500 game on Game Night. Code: ' + N.code, url = location.origin + location.pathname + '#/rummy/join';
+          if (navigator.share) navigator.share({ title: 'Rummy 500', text: t, url: url }).catch(function () {});
+          else { try { navigator.clipboard.writeText(t + ' ' + url); UI.toast('Copied. Paste it in a text.'); } catch (e) { UI.toast(t); } }
+        } })
+      ]));
+      body.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Players' }), seatList(L.seats, L.cfg.mode === 'team', 0)]));
+      body.appendChild(h('button', { class: 'bigbtn rummy', text: 'Start the game', onclick: hostStart }));
+      body.appendChild(h('button', { class: 'ghostbtn', text: 'Cancel', onclick: function () { leaveOnline(); location.hash = '#/rummy'; } }));
+    }
+    onUpdate = function () { if (document.body.contains(body)) draw(); };
+    draw();
+  }
+
+  function joinScreen(root) {
+    root.appendChild(UI.topbar('Join a game', '#/rummy'));
+    var body = h('div'); root.appendChild(body);
+    function draw() {
+      body.innerHTML = '';
+      if (N.role === 'client' && N.lobby) {
+        var L = N.lobby;
+        body.appendChild(h('div', { class: 'panel rumcodebox' }, [h('h3', { text: 'Joined game ' + L.code }), h('p', { class: 'levelnote', text: 'You are in! Waiting for the host to start. Play to ' + L.cfg.target + '.' })]));
+        body.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Players' }), seatList(L.seats, L.cfg.mode === 'team', L.seat)]));
+        body.appendChild(h('button', { class: 'ghostbtn', text: 'Leave', onclick: function () { closeNet(); location.hash = '#/rummy'; } }));
+        return;
+      }
+      var nameI = nameInput();
+      var codeI = h('input', { class: 'ruminput rumcodein', type: 'text', maxlength: 4, placeholder: 'CODE', autocomplete: 'off', autocapitalize: 'characters', value: N.role === 'client' ? N.code : '' });
+      codeI.addEventListener('input', function () { codeI.value = codeI.value.toUpperCase(); });
+      body.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Your name' }), nameI, h('h3', { text: 'Game code', style: 'margin-top:14px' }), codeI,
+        N.status ? h('p', { class: 'levelnote rumwarn', text: N.status }) : null]));
+      body.appendChild(h('button', { class: 'bigbtn rummy', text: 'Join', onclick: function () {
+        if (!nameI.value.trim()) { UI.toast('Type your name first.'); return; }
+        if (codeI.value.trim().length < 4) { UI.toast('The code has 4 letters or numbers.'); return; }
+        join(codeI.value, nameI.value);
+      } }));
+    }
+    onUpdate = function () { if (document.body.contains(body)) draw(); };
+    draw();
+  }
+
+  function sideName(s, k, mySeat) {
+    if (!s.teams) return s.players[k].name;
+    return k === s.players[mySeat].team ? 'Your team' : 'Their team';
+  }
   function cardEl(c, cls) {
     var r = E.RANKS[E.rank(c)], su = E.SUITS[E.suit(c)];
     return h('div', { class: 'pcard ' + (E.red(c) ? 'red ' : '') + (cls || '') }, [
@@ -71,73 +426,129 @@ var Rummy = (function () {
     ]);
   }
 
+  // Local play on this phone
   function play(root) {
     var s = UI.store('rum_game');
     if (!s) { location.hash = '#/rummy'; return; }
+    if (D && D.mode === 'host') { location.hash = '#/rummy/online'; return; }
+    newDriver(s, s.players.map(function (p, i) { return { name: p.name, kind: i === 0 ? 'me' : 'bot' }; }), 'local');
+    table(root, {
+      back: '#/rummy', online: false,
+      seat: function () { return 0; }, view: function () { return D.s; }, msg: function () { return D.msg; }, info: function () { return null; }, status: function () { return ''; },
+      act: function (a, x) { var err = apply(0, a, x); if (err) UI.toast(err); }, isHost: true
+    });
+    if (D.s.phase === 'draw' && D.s.turn !== 0) runBots();
+  }
+  // Online play (host or guest)
+  function online(root) {
+    if (N.role === 'host' && D && D.mode === 'host') {
+      table(root, {
+        back: '#/rummy', online: true, isHost: true,
+        seat: function () { return 0; }, view: function () { return D.s; }, msg: function () { return D.msg; }, info: seatInfo,
+        status: function () { return N.status ? N.status : 'Code ' + N.code; },
+        act: function (a, x) { var err = apply(0, a, x); if (err) UI.toast(err); }
+      });
+      return;
+    }
+    if (N.role === 'client' && N.view) {
+      table(root, {
+        back: '#/rummy', online: true, isHost: false,
+        seat: function () { return N.seat; }, view: function () { return N.view; }, msg: function () { return N.msg; }, info: function () { return N.info; },
+        status: function () { return N.status || 'Game ' + N.code; },
+        act: function (a, x) { if (!(N.conn && N.conn.open)) { UI.toast('Reconnecting... try again in a moment.'); return; } send(N.conn, { t: 'act', a: a, x: x }); }
+      });
+      return;
+    }
+    location.hash = '#/rummy';
+  }
+
+  // The card table. src supplies the current view (full state for the host, private view for guests).
+  function table(root, src) {
     var scene = h('div', { class: 'rumscene' }); root.appendChild(scene);
-    root.appendChild(UI.topbar('Rummy 500', '#/rummy', h('button', { class: 'iconbtn', html: '&#128202;', 'aria-label': 'Scores', onclick: scoreSheet })));
-    var opp = h('div', { class: 'rumopp' }), status = h('div', { class: 'status rumstatus' }), table = h('div', { class: 'rumtable' });
+    root.appendChild(UI.topbar('Rummy 500', src.back, h('button', { class: 'iconbtn', html: '&#128202;', 'aria-label': 'Scores', onclick: scoreSheet })));
+    var netEl = h('div', { class: 'rumnet' });
+    var opp = h('div', { class: 'rumopp' }), status = h('div', { class: 'status rumstatus' }), tbl = h('div', { class: 'rumtable' });
     var piles = h('div', { class: 'rumpiles' }), stockEl = h('button', { class: 'rumstock' }), discEl = h('div', { class: 'rumdisc' });
     piles.appendChild(stockEl); piles.appendChild(discEl);
     var handEl = h('div', { class: 'rumhand' }), acts = h('div', { class: 'rumacts' });
-    [opp, status, table, piles, handEl, acts].forEach(function (x) { root.appendChild(x); });
-    var sel = [], sortMode = UI.store('rum_sort') || 'suit', busy = false, fresh = {}, alive = true, hint = [];
+    [netEl, opp, status, tbl, piles, handEl, acts].forEach(function (x) { root.appendChild(x); });
+    if (!src.online) netEl.style.display = 'none';
+    var sel = [], sortMode = UI.store('rum_sort') || 'suit', fresh = {}, prevHand = null, hint = [], hintMsg = '', shownKey = '', lastMsg = null;
     var btnMeld = h('button', { text: 'Meld', onclick: doMeld }), btnDisc = h('button', { text: 'Discard', onclick: doDiscard });
     var btnSort = h('button', { onclick: function () { sortMode = sortMode === 'suit' ? 'rank' : 'suit'; UI.store('rum_sort', sortMode); render(); } });
     var btnHint = h('button', { text: 'Hint', onclick: doHint });
     [btnMeld, btnDisc, btnSort, btnHint].forEach(function (b) { acts.appendChild(b); });
-    stockEl.addEventListener('click', function () { if (myDraw()) { var c = E.drawStock(s); fresh = {}; fresh[c] = 1; Sound.play('land'); after('You drew ' + E.label(c) + ' from the deck.'); } });
+    stockEl.addEventListener('click', function () { if (myDraw()) { Sound.play('land'); src.act('stock'); } });
 
-    function save() { UI.store('rum_game', s); }
-    function me() { return s.players[0]; }
-    function myTurn() { return s.turn === 0 && !busy && (s.phase === 'draw' || s.phase === 'play'); }
-    function myDraw() { return myTurn() && s.phase === 'draw'; }
+    function S() { return src.view(); }
+    function seat() { return src.seat(); }
+    function me() { return S().players[seat()]; }
+    function myTurn() { var s = S(); return s.turn === seat() && (s.phase === 'draw' || s.phase === 'play'); }
+    function myDraw() { return myTurn() && S().phase === 'draw'; }
     function sorted(hand) {
       return hand.slice().sort(function (a, b) {
         if (sortMode === 'suit') return E.suit(a) - E.suit(b) || E.rank(a) - E.rank(b);
         return E.rank(a) - E.rank(b) || E.suit(a) - E.suit(b);
       });
     }
-    function setStatus(t, alert) { status.textContent = t; status.classList.toggle('alert', !!alert); }
     function prompt() {
+      var s = S();
       if (s.phase === 'draw') return 'Your turn. Draw from the deck, or tap a card in the discard pile.';
       if (s.mustUse !== null) return 'You must play the ' + E.label(s.mustUse) + ' in a meld (or lay it off) this turn.';
       return 'Meld or lay off if you can, then discard one card.';
     }
-    function after(msg) { sel = []; hint = []; save(); render(); setStatus(msg + ' ' + prompt()); }
+    function youify(m) {
+      var nm = me().name;
+      if (m && nm !== 'You' && m.indexOf(nm + ' ') === 0) m = 'You ' + m.slice(nm.length + 1).replace(/^is /, 'are ');
+      return m || '';
+    }
 
     function render() {
-      if (!alive) return;
-      // opponents + score
+      if (!document.body.contains(scene)) return;
+      var s = S(), info = src.info(), mySeat = seat(), my = me();
+      // fresh cards (just drawn)
+      if (prevHand) {
+        var added = my.hand.filter(function (c) { return prevHand.indexOf(c) < 0; });
+        if (added.length) { fresh = {}; added.forEach(function (c) { fresh[c] = 1; }); }
+      }
+      prevHand = my.hand.slice();
+      sel = sel.filter(function (c) { return my.hand.indexOf(c) >= 0; });
+      hint = hint.filter(function (c) { return my.hand.indexOf(c) >= 0; });
+      netEl.textContent = src.online ? (src.isHost ? '\uD83D\uDCF6 Hosting \u00B7 ' : '\uD83D\uDCF6 Online \u00B7 ') + src.status() : '';
+      // players + score
       opp.innerHTML = '';
       var sd = E.sides(s);
       s.players.forEach(function (p, i) {
-        if (i === 0) return;
-        var partner = s.teams && p.team === me().team;
-        opp.appendChild(h('div', { class: 'rumchip' + (s.turn === i && s.phase !== 'over' && s.phase !== 'gameover' ? ' on' : ''), style: '--c:' + COLORS[i] }, [
-          h('b', { text: cp(BOTS[i - 1].a) + ' ' + p.name + (partner ? ' (partner)' : '') }),
-          h('span', { text: p.hand.length + ' cards' + (s.teams ? '' : ' \u00B7 ' + p.score) })
+        if (i === mySeat) return;
+        var partner = s.teams && p.team === my.team, inf = info ? info[i] : null;
+        var tag = inf ? (inf.kind === 'bot' ? ' \u00B7 computer' : !inf.on ? ' \u00B7 away' : '') : '';
+        opp.appendChild(h('div', { class: 'rumchip' + (s.turn === i && (s.phase === 'draw' || s.phase === 'play') ? ' on' : '') + (inf && !inf.on ? ' away' : ''), style: '--c:' + COLORS[i] }, [
+          h('b', { text: cp(AV[i]) + ' ' + p.name + (partner ? ' (partner)' : '') }),
+          h('span', { text: p.hand.length + ' cards' + (s.teams ? '' : ' \u00B7 ' + p.score) + tag })
         ]));
       });
-      var scoreTxt = s.teams ? 'Your team ' + sd[me().team].score + ' \u00B7 Them ' + sd[1 - me().team].score : 'You ' + me().score;
+      var scoreTxt = s.teams ? 'Your team ' + sd[my.team].score + ' \u00B7 Them ' + sd[1 - my.team].score : 'You ' + my.score;
       opp.appendChild(h('div', { class: 'rumscore', text: scoreTxt + ' / ' + s.target + ' \u00B7 Hand ' + s.round }));
+      // status
+      var m = src.msg();
+      if (m !== lastMsg) { lastMsg = m; hintMsg = ''; }
+      var text = hintMsg || ((m ? youify(m) + ' ' : '') + (myTurn() ? prompt() : (s.phase === 'draw' || s.phase === 'play') && s.turn !== mySeat && m.indexOf('thinking') < 0 ? 'Waiting for ' + s.players[s.turn].name + '...' : ''));
+      status.textContent = text; status.classList.toggle('alert', !!hintMsg || myTurn());
       // table melds
-      table.innerHTML = '';
-      if (!s.melds.length) table.appendChild(h('p', { class: 'rumempty', text: 'Melds will show up here.' }));
+      tbl.innerHTML = '';
+      if (!s.melds.length) tbl.appendChild(h('p', { class: 'rumempty', text: 'Melds will show up here.' }));
       var one = sel.length === 1 ? sel[0] : null;
-      s.melds.forEach(function (m, mi) {
-        var ok = one !== null && myTurn() && s.phase === 'play' && E.layOffResult(m, one);
-        var g = h('button', { class: 'rummeld' + (ok ? ' can' : ''), style: '--c:' + COLORS[m.by] });
-        m.cards.forEach(function (c) { g.appendChild(cardEl(c, 'sm')); });
+      s.melds.forEach(function (md, mi) {
+        var ok = one !== null && myTurn() && s.phase === 'play' && E.layOffResult(md, one);
+        var g = h('button', { class: 'rummeld' + (ok ? ' can' : ''), style: '--c:' + COLORS[md.by] });
+        md.cards.forEach(function (c) { g.appendChild(cardEl(c, 'sm')); });
         g.addEventListener('click', function () {
-          if (!myTurn() || s.phase !== 'play') return;
+          if (!myTurn() || S().phase !== 'play') return;
           if (one === null) { UI.toast('Select one card from your hand, then tap a meld to lay it off.'); return; }
           if (!ok) { UI.toast(E.label(one) + ' does not fit that meld.'); Sound.play('nope'); return; }
-          E.layOff(s, one, mi); Sound.play('pop', 3);
-          if (s.phase === 'over' || s.phase === 'gameover') return roundOver();
-          after('Laid off ' + E.label(one) + '.');
+          Sound.play('pop', 3); sel = []; hintMsg = ''; src.act('layoff', [one, mi]);
         });
-        table.appendChild(g);
+        tbl.appendChild(g);
       });
       // piles
       stockEl.innerHTML = ''; stockEl.appendChild(h('div', { class: 'pcard back' }, h('span', { class: 'pc-mid', text: s.stock.length })));
@@ -151,148 +562,112 @@ var Rummy = (function () {
       discEl.scrollLeft = discEl.scrollWidth;
       // hand
       handEl.innerHTML = '';
-      var cards = sorted(me().hand), W = handEl.clientWidth || 340, CW = 52, n = cards.length;
+      var cards = sorted(my.hand), W = handEl.clientWidth || 340, CW = 52, n = cards.length;
       var rows = n > 14 ? 2 : 1, perRow = Math.ceil(n / rows);
       var step = perRow > 1 ? Math.min(CW + 4, (W - CW) / (perRow - 1)) : 0;
       handEl.style.height = (rows * 84 + 18) + 'px';
       cards.forEach(function (c, k) {
         var row = Math.floor(k / perRow), col = k % perRow;
-        var el = cardEl(c, (sel.indexOf(c) >= 0 ? 'sel ' : '') + (fresh[c] ? 'fresh ' : '') + (c === s.mustUse ? 'must ' : '') + (hint.indexOf(c) >= 0 ? 'hint' : ''));
+        var el = cardEl(c, (sel.indexOf(c) >= 0 ? 'sel ' : '') + (fresh[c] ? 'fresh ' : '') + (c === s.mustUse && myTurn() ? 'must ' : '') + (hint.indexOf(c) >= 0 ? 'hint' : ''));
         el.style.left = (col * step) + 'px'; el.style.top = (row * 84 + 14) + 'px'; el.style.zIndex = k + 1;
         el.addEventListener('click', function () {
-          if (!myTurn()) return;
-          if (s.phase === 'draw') { UI.toast('Draw first: tap the deck or the discard pile.'); return; }
+          if (!myTurn()) { UI.toast('Wait for your turn.'); return; }
+          if (S().phase === 'draw') { UI.toast('Draw first: tap the deck or the discard pile.'); return; }
           var i = sel.indexOf(c); if (i >= 0) sel.splice(i, 1); else sel.push(c);
           Sound.play('land'); render();
         });
         handEl.appendChild(el);
       });
-      // buttons
       var playing = myTurn() && s.phase === 'play';
       btnMeld.disabled = !(playing && sel.length >= 3 && E.asMeld(sel));
       btnDisc.disabled = !(playing && sel.length === 1 && E.canDiscard(s, sel[0]));
       btnSort.textContent = sortMode === 'suit' ? 'Sort: suit' : 'Sort: rank';
       btnHint.disabled = !myTurn();
+      // end of hand / game
+      if (s.phase === 'over' || s.phase === 'gameover') {
+        var key = s.round + s.phase + (s.gid || '');
+        if (key !== shownKey) { shownKey = key; setTimeout(roundOver, 700); }
+      } else if (shownKey && document.querySelector('.rumroundmodal')) { UI.closeModal(); shownKey = ''; }
     }
 
     function takeDiscard(i) {
       if (!myDraw()) return;
-      var top = i === s.discard.length - 1;
-      function go() {
-        var r = E.drawDiscard(s, i);
-        if (!r.ok) { Sound.play('nope'); UI.toast('You can only take the ' + E.label(s.discard[i]) + ' if you can play it right away.'); return; }
-        fresh = {}; r.picked.forEach(function (c) { fresh[c] = 1; });
-        Sound.play('swap');
-        after(top ? 'You took the ' + E.label(r.picked[0]) + '.' : 'You took ' + r.picked.length + ' cards.');
-      }
-      if (top) return go();
-      var n = s.discard.length - i;
-      UI.modal({ title: 'Take ' + n + ' cards?', text: 'You get the ' + E.label(s.discard[i]) + ' and the ' + (n - 1) + ' card' + (n > 2 ? 's' : '') + ' above it. You must play the ' + E.label(s.discard[i]) + ' this turn.',
-        buttons: [{ label: 'Take them', cls: 'rummy', fn: go }, { label: 'Cancel' }] });
+      var s = S(), top = i === s.discard.length - 1;
+      if (top) { Sound.play('swap'); src.act('pile', i); return; }
+      var picked = s.discard.slice(i), card = picked[0];
+      if (!E.canUse(me().hand.concat(picked), card, s.melds)) { Sound.play('nope'); UI.toast('You can only take the ' + E.label(card) + ' if you can play it right away.'); return; }
+      var n = picked.length;
+      UI.modal({ title: 'Take ' + n + ' cards?', text: 'You get the ' + E.label(card) + ' and the ' + (n - 1) + ' card' + (n > 2 ? 's' : '') + ' above it. You must play the ' + E.label(card) + ' this turn.',
+        buttons: [{ label: 'Take them', cls: 'rummy', fn: function () { Sound.play('swap'); src.act('pile', i); } }, { label: 'Cancel' }] });
     }
-    function doMeld() {
-      var m = E.meld(s, sel.slice()); if (!m) return;
-      Sound.play('combo', 2);
-      if (s.phase === 'over' || s.phase === 'gameover') return roundOver();
-      after('Nice ' + (m.type === 'set' ? 'set' : 'run') + ', +' + m.pts + '.');
-    }
+    function doMeld() { var cards = sel.slice(); if (!E.asMeld(cards)) return; Sound.play('combo', 2); sel = []; hint = []; hintMsg = ''; src.act('meld', cards); }
     function doDiscard() {
-      var c = sel[0];
+      var s = S(), c = sel[0];
       if (!E.canDiscard(s, c)) {
         if (s.mustUse !== null) UI.toast('Play the ' + E.label(s.mustUse) + ' first.');
         else if (c === s.tookTop) UI.toast('You cannot throw back the card you just took.');
         return;
       }
-      E.discard(s, c); Sound.play('land'); sel = []; fresh = {}; save();
-      if (s.phase === 'over' || s.phase === 'gameover') return roundOver();
-      render(); bots();
+      Sound.play('land'); sel = []; fresh = {}; hint = []; hintMsg = ''; src.act('discard', c);
     }
     function doHint() {
       if (!myTurn()) return;
-      var hand = me().hand;
+      var s = JSON.parse(JSON.stringify(S())), hand = me().hand;
       if (s.phase === 'draw') {
         var d = E.aiDraw(s);
-        if (d.from === 'stock') setStatus('Hint: nothing in the discard pile helps you. Draw from the deck.', true);
-        else setStatus('Hint: take the ' + E.label(s.discard[d.index]) + (d.index < s.discard.length - 1 ? ' (and the cards above it)' : '') + ' from the discard pile.', true);
-        return;
+        hintMsg = d.from === 'stock' ? 'Hint: nothing in the discard pile helps you. Draw from the deck.' :
+          'Hint: take the ' + E.label(s.discard[d.index]) + (d.index < s.discard.length - 1 ? ' (and the cards above it)' : '') + ' from the discard pile.';
+        render(); return;
       }
       var b = E.bestMelds(hand, s.mustUse !== null && E.layOffTarget(s.melds, s.mustUse) < 0 ? s.mustUse : undefined);
-      if (b && b.melds.length) { hint = b.melds[0].cards.slice(); sel = hint.slice(); render(); setStatus('Hint: these cards make a ' + b.melds[0].type + '. Tap Meld.', true); return; }
+      if (b && b.melds.length) { hint = b.melds[0].cards.slice(); sel = hint.slice(); hintMsg = 'Hint: these cards make a ' + b.melds[0].type + '. Tap Meld.'; render(); return; }
       for (var i = 0; i < hand.length; i++) if (E.layOffTarget(s.melds, hand[i]) >= 0) {
-        sel = [hand[i]]; hint = sel.slice(); render(); setStatus('Hint: ' + E.label(hand[i]) + ' can be laid off. Tap the glowing meld.', true); return;
+        sel = [hand[i]]; hint = sel.slice(); hintMsg = 'Hint: the ' + E.label(hand[i]) + ' can be laid off. Tap the glowing meld.'; render(); return;
       }
-      var dc = E.aiDiscard(s); sel = [dc]; hint = [dc]; render(); setStatus('Hint: no melds right now. Discard the ' + E.label(dc) + '.', true);
-    }
-
-    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-    function bots() {
-      if (!alive || s.turn === 0 || s.phase !== 'draw') { if (alive) { render(); if (s.turn === 0 && s.phase === 'draw') setStatus(prompt()); } return; }
-      busy = true; render();
-      var p = s.players[s.turn], who = p.name + (s.teams && p.team === me().team ? ' (partner)' : '');
-      setStatus(who + ' is thinking...');
-      wait(800).then(function () {
-        if (!alive) return;
-        var d = E.aiDraw(s), msg;
-        if (d.from === 'stock') { E.drawStock(s); msg = who + ' drew from the deck.'; }
-        else { var r = E.drawDiscard(s, d.index); msg = who + ' took ' + (r.picked.length === 1 ? 'the ' + E.label(r.picked[0]) : r.picked.length + ' cards from the pile') + '.'; }
-        Sound.play('land'); render(); setStatus(msg);
-        return wait(900).then(function () {
-          if (!alive) return;
-          var actions = E.aiPlay(s), lines = [];
-          actions.forEach(function (a) {
-            if (a.t === 'meld') lines.push('melded ' + a.cards.map(E.label).join(' '));
-            if (a.t === 'layoff') lines.push('laid off ' + E.label(a.card));
-            if (a.t === 'discard') lines.push('threw the ' + E.label(a.card));
-          });
-          if (actions.some(function (a) { return a.t !== 'discard'; })) Sound.play('combo', 1); else Sound.play('land');
-          save(); busy = false; render();
-          setStatus(who + ' ' + (lines.join(', ') || 'played') + '.');
-          if (s.phase === 'over' || s.phase === 'gameover') return wait(900).then(roundOver);
-          return wait(1100).then(bots);
-        });
-      });
+      var dc = E.aiDiscard(s); sel = [dc]; hint = [dc]; hintMsg = 'Hint: no melds right now. Discard the ' + E.label(dc) + '.'; render();
     }
 
     function scoreTable() {
-      var t = h('table', { class: 'rumtbl' }), rows = s.result ? s.result.rows : null;
-      t.appendChild(h('tr', null, [h('th', { text: '' }), h('th', { text: 'Table' }), h('th', { text: 'Hand' }), h('th', { text: 'Total' })]));
+      var s = S(), t = h('table', { class: 'rumtbl' }), rows = s.result ? s.result.rows : null;
+      t.appendChild(h('tr', null, [h('th', { text: '' }), h('th', { text: rows ? 'Table' : 'This hand' }), h('th', { text: rows ? 'Hand' : '' }), h('th', { text: 'Total' })]));
       s.players.forEach(function (p, i) {
-        var r = rows ? rows[i] : { table: p.table, hand: E.handPoints(p.hand) };
-        t.appendChild(h('tr', null, [h('td', { text: p.name }), h('td', { text: '+' + r.table }), h('td', { text: '-' + r.hand }), h('td', { text: String(p.score) })]));
+        var r = rows ? rows[i] : null;
+        t.appendChild(h('tr', null, [h('td', { text: p.name }), h('td', { text: '+' + (r ? r.table : p.table) }), h('td', { text: r ? '-' + r.hand : '' }), h('td', { text: String(p.score) })]));
       });
-      if (s.teams) {
-        var sd = E.sides(s);
-        sd.forEach(function (x, k) { t.appendChild(h('tr', { class: 'team' }, [h('td', { text: sideName(s, k) }), h('td'), h('td'), h('td', { text: String(x.score) })])); });
-      }
+      if (s.teams) E.sides(s).forEach(function (x, k) { t.appendChild(h('tr', { class: 'team' }, [h('td', { text: sideName(s, k, seat()) }), h('td'), h('td'), h('td', { text: String(x.score) })])); });
       return t;
     }
     function scoreSheet() {
+      var s = S();
       UI.modal({ title: 'Scores \u00B7 Hand ' + s.round, body: scoreTable(), text: 'Playing to ' + s.target + '.', buttons: [{ label: 'Back to the game', cls: 'rummy' }] });
     }
     function roundOver() {
-      save(); render();
-      var res = s.result, outBy = s.players[res.by];
-      var head = res.how === 'out' ? (res.by === 0 ? 'You went out!' : outBy.name + ' went out.') : 'The deck ran out.';
+      if (!document.body.contains(scene)) return;
+      var s = S(); if (s.phase !== 'over' && s.phase !== 'gameover') return;
+      var head = roundHead(s), wrap = h('div', { class: 'rumroundmodal' }, scoreTable());
       if (s.phase === 'gameover') {
-        var mine = s.winner === me().team || (!s.teams && s.winner === 0);
+        var mine = s.winner === me().team;
         if (mine) { UI.confetti(); Sound.play('win'); } else Sound.play('lose');
-        var bests = UI.store('rum_wins') || { w: 0, l: 0 };
-        if (!s.recorded) { s.recorded = true; if (mine) bests.w++; else bests.l++; UI.store('rum_wins', bests); save(); }
-        UI.modal({ big: mine ? '\uD83C\uDFC6' : '\uD83C\uDCCF', title: mine ? (s.teams ? 'Your team wins!' : 'You win!') : sideName(s, s.winner) + ' wins.',
-          text: head + ' Your record: ' + bests.w + ' wins, ' + bests.l + ' losses.', body: scoreTable(), dismiss: false,
-          buttons: [{ label: 'New game', cls: 'rummy', fn: function () { UI.store('rum_game', null); location.hash = '#/rummy'; } }] });
+        var rec = UI.store('rum_wins') || { w: 0, l: 0 }, gkey = (s.gid || '') + ':' + s.round + ':' + s.players.map(function (p) { return p.score; }).join(',');
+        if (rec.last !== gkey) { rec.last = gkey; if (mine) rec.w++; else rec.l++; UI.store('rum_wins', rec); }
+        var btns = src.online && !src.isHost ? [{ label: 'OK', cls: 'rummy' }] :
+          [{ label: src.online ? 'Play again (same players)' : 'New game', cls: 'rummy', fn: function () {
+            if (src.online) src.act('again'); else { UI.store('rum_game', null); location.hash = '#/rummy'; }
+          } }];
+        if (src.online) btns.push({ label: 'Leave online game', fn: function () { if (src.isHost) leaveOnline(); else closeNet(); location.hash = '#/rummy'; } });
+        UI.modal({ big: mine ? '\uD83C\uDFC6' : '\uD83C\uDCCF', title: mine ? (s.teams ? 'Your team wins!' : 'You win!') : sideName(s, s.winner, seat()) + ' wins.',
+          text: head + ' Your record: ' + rec.w + ' wins, ' + rec.l + ' losses.' + (src.online && !src.isHost ? ' The host can start another game.' : ''), body: wrap, dismiss: false, buttons: btns });
         return;
       }
-      UI.modal({ title: head, body: scoreTable(), dismiss: false,
-        buttons: [{ label: 'Deal the next hand', cls: 'rummy', fn: function () { E.nextRound(s); fresh = {}; sel = []; save(); render(); bots(); } }] });
+      UI.modal({ title: head, body: wrap, dismiss: false,
+        buttons: [{ label: 'Deal the next hand', cls: 'rummy', fn: function () { src.act('next'); } }] });
     }
 
-    var watch = setInterval(function () { if (!document.body.contains(scene)) { alive = false; clearInterval(watch); } }, 500);
-    window.addEventListener('resize', function () { if (alive) render(); });
+    onUpdate = function () { render(); };
+    window.addEventListener('resize', function () { if (document.body.contains(scene)) render(); });
     render();
-    if (s.phase === 'over' || s.phase === 'gameover') roundOver();
-    else if (s.turn !== 0) bots();
-    else setStatus(prompt());
   }
-  return { setup: setup, play: play };
+
+  return { setup: setup, play: play, online: online, host: hostScreen, join: joinScreen,
+    _net: N, _driver: function () { return D; } };
 })();

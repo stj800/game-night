@@ -53,7 +53,7 @@
     'checkers': Checkers.setup, 'checkers/play': Checkers.play, 'checkers/learn': Checkers.learn,
     'sudoku': Sudoku.setup, 'sudoku/play': Sudoku.play, 'sudoku/learn': Sudoku.learn,
     'mahjong': Mahjong.setup, 'mahjong/play': Mahjong.play, 'mahjong/learn': Mahjong.learn,
-    'rummy': Rummy.setup, 'rummy/play': Rummy.play,
+    'rummy': Rummy.setup, 'rummy/play': Rummy.play, 'rummy/online': Rummy.online, 'rummy/host': Rummy.host, 'rummy/join': Rummy.join,
     'memory': MemoryMatch.setup, 'memory/play': MemoryMatch.play, 'echo': Echo.setup, 'echo/play': Echo.play,
     'invaders': Invaders.setup, 'invaders/play': Invaders.play,
     'breakout': Breakout.setup, 'breakout/play': Breakout.play, 'rocks': Rocks.setup, 'rocks/play': Rocks.play,
