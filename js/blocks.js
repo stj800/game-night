@@ -37,7 +37,7 @@ var Blocks = (function () {
   function play(root) {
     var cfg = UI.store('bd_cfg') || { level: 1 };
     var L = LEVELS[cfg.level - 1];
-    root.appendChild(UI.topbar('Block Drop', '#/blocks'));
+    root.appendChild(UI.topbar('Block Drop', '#/blocks', Swap.soundToggles()));
     var stats = h('div', { class: 'bdstats' });
     var canvas = h('canvas', { class: 'bdcanvas' });
     var nextC = h('canvas', { class: 'bdnext', width: 120, height: 80 });
@@ -202,7 +202,7 @@ var Blocks = (function () {
     ctl.appendChild(holdBtn('&#9660;', 'Down', soft, true));
     ctl.appendChild(holdBtn('&#10515;', 'Drop', hard, false));
     root.appendChild(h('div', { class: 'toolbar two' }, [
-      UI.tbtn('&#10074;&#10074;', 'Pause', function () { if (!over) { paused = !paused; draw(); } }),
+      UI.tbtn('&#10074;&#10074;', 'Pause', function () { if (!over) { paused = !paused; if (paused) Sound.stopMusic(); else Sound.playMusic('blocks'); draw(); } }),
       UI.tbtn('&#10227;', 'Restart', function () { UI.modal({ title: 'Restart?', text: 'Your score resets.', buttons: [{ label: 'Restart', cls: 'blocks', fn: start }, { label: 'Keep playing' }] }); })]));
 
     // Touch gestures on the board
@@ -233,6 +233,12 @@ var Blocks = (function () {
       if (document.hidden && !over) { paused = true; draw(); }
     });
 
+    // Music lives only on this screen: start now, and again on the first tap (phones need a tap before sound)
+    Sound.playMusic('blocks');
+    root.addEventListener('pointerdown', function first() {
+      if (!document.body.contains(canvas)) { root.removeEventListener('pointerdown', first); return; }
+      if (!paused && !over) Sound.playMusic('blocks');
+    });
     size(); start();
     window.addEventListener('resize', function rs() { if (!document.body.contains(canvas)) { window.removeEventListener('resize', rs); return; } size(); draw(); });
     raf = requestAnimationFrame(loop);

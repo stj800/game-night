@@ -73,7 +73,8 @@ var Sound = (function () {
   var SONGS = {
     orchard: { bpm: 116, shift: 0, lead: 'triangle', arp: 'square', swing: 0 },
     tropical: { bpm: 124, shift: 5, lead: 'square', arp: 'triangle', swing: 0.08 },
-    night: { bpm: 104, shift: -3, lead: 'sine', arp: 'triangle', swing: 0 }
+    night: { bpm: 104, shift: -3, lead: 'sine', arp: 'triangle', swing: 0 },
+    blocks: { bpm: 138, shift: 2, lead: 'square', arp: 'sawtooth', swing: 0 }
   };
 
   function schedule() {
@@ -127,9 +128,35 @@ var Sound = (function () {
   };
   function play(name, arg) { if (!prefs.sfx || !init() || !sfx[name]) return; sfx[name](ctx.currentTime + 0.01, arg || 1); }
 
+  // ---------- Deep announcer voice (the phone's built-in speech, pitched way down) ----------
+  var voice = null, voiceUnlocked = false;
+  function pickVoice() {
+    if (voice || !window.speechSynthesis) return voice;
+    var vs = speechSynthesis.getVoices().filter(function (v) { return /^en/i.test(v.lang); });
+    var prefer = ['Daniel', 'Arthur', 'Aaron', 'Fred', 'Gordon', 'Rishi', 'Alex', 'Google UK English Male', 'Male', 'David', 'Mark', 'Guy'];
+    for (var i = 0; i < prefer.length && !voice; i++) voice = vs.filter(function (v) { return v.name.indexOf(prefer[i]) >= 0; })[0] || null;
+    return voice || vs[0] || null;
+  }
+  if (window.speechSynthesis) speechSynthesis.onvoiceschanged = function () { voice = null; pickVoice(); };
+  function unlockVoice() {
+    if (voiceUnlocked || !window.speechSynthesis) return;
+    voiceUnlocked = true;
+    try { var u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
+  }
+  function say(text) {
+    if (!prefs.sfx || !window.speechSynthesis || document.hidden) return;
+    try {
+      speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      var v = pickVoice(); if (v) u.voice = v;
+      u.pitch = 0.1; u.rate = 0.78; u.volume = 1;
+      speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+
   function setMusic(on) { prefs.music = on; save(); if (ctx) musicBus.gain.setTargetAtTime(on ? 0.22 : 0, ctx.currentTime, 0.05); }
-  function setSfx(on) { prefs.sfx = on; save(); if (ctx) sfxBus.gain.setTargetAtTime(on ? 0.55 : 0, ctx.currentTime, 0.05); }
+  function setSfx(on) { prefs.sfx = on; save(); if (!on && window.speechSynthesis) speechSynthesis.cancel(); if (ctx) sfxBus.gain.setTargetAtTime(on ? 0.55 : 0, ctx.currentTime, 0.05); }
 
   function state() { return ctx ? { ctx: ctx.state, music: musicBus.gain.value, sfx: sfxBus.gain.value, playing: !!timer } : null; }
-  return { init: init, playMusic: playMusic, stopMusic: stopMusic, play: play, prefs: prefs, setMusic: setMusic, setSfx: setSfx, state: state };
+  return { init: init, playMusic: playMusic, stopMusic: stopMusic, play: play, prefs: prefs, setMusic: setMusic, setSfx: setSfx, state: state, say: say, unlockVoice: unlockVoice };
 })();

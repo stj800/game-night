@@ -373,3 +373,91 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .soundtoggle.off span b { color: #ff5d73; }
 .soundtoggle:active { transform: scale(0.95); }
 .fsscene ~ .topbar h1 { font-size: 19px; }
+
+/* ===== Fruit Swap: level map ===== */
+.maphead { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+.boostcount { background: rgba(27,20,70,0.6); border-radius: 14px; padding: 10px 14px; font-size: 18px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.plus5 { display: inline-block; background: #3ee08f; color: #0d3b22; font-weight: 900; font-size: 12px; border-radius: 6px; padding: 1px 4px; vertical-align: 2px; }
+.giftbtn { background: rgba(27,20,70,0.6); border-radius: 14px; padding: 10px 14px; font-weight: 800; font-size: 15px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.giftbtn.ready { background: linear-gradient(135deg, #ff4f9a, #ffb03d); animation: giftpulse 1.2s ease-in-out infinite; }
+@keyframes giftpulse { 50% { transform: scale(1.07); box-shadow: 0 0 22px rgba(255,207,63,0.9); } }
+.mapstars { text-align: center; font-weight: 800; color: #ffe27a; text-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-bottom: 4px; }
+.mappath { padding: 6px 0 20px; }
+.worldtitle {
+  text-align: center; font-weight: 900; font-size: 18px; margin: 18px auto 6px; padding: 8px 14px; border-radius: 14px; max-width: 300px;
+  background: rgba(27,20,70,0.65); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.worldtitle.w1 { box-shadow: inset 0 0 0 2px #3ee08f; }
+.worldtitle.w2 { box-shadow: inset 0 0 0 2px #ff7a59; }
+.worldtitle.w3 { box-shadow: inset 0 0 0 2px #b06bff; }
+.maprow { position: relative; height: 92px; }
+.mapdots { position: absolute; top: 42px; height: 0; border-top: 4px dotted rgba(255,255,255,0.75); }
+.mapnode {
+  position: absolute; top: 8px; transform: translateX(-50%); width: 66px; height: 66px; border-radius: 50%; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 35% 30%, #fff, #ffd166 30%, #ff8c1a 75%); color: #5a2300;
+  box-shadow: 0 6px 0 #b4530a, 0 10px 18px rgba(0,0,0,0.35); border: 3px solid #fff;
+}
+.mapnode.w2 { background: radial-gradient(circle at 35% 30%, #fff, #ff9aa2 30%, #ff4f9a 75%); color: #5a0026; box-shadow: 0 6px 0 #a4235e, 0 10px 18px rgba(0,0,0,0.35); }
+.mapnode.w3 { background: radial-gradient(circle at 35% 30%, #fff, #c9a7ff 30%, #7b3fe4 75%); color: #fff; box-shadow: 0 6px 0 #4b1fa0, 0 10px 18px rgba(0,0,0,0.35); }
+.mapnode .num { font-size: 24px; font-weight: 900; line-height: 1; }
+.mapnode .nstars { font-size: 13px; color: #ffcf3f; text-shadow: 0 1px 2px rgba(0,0,0,0.8); position: absolute; bottom: -19px; letter-spacing: 1px; white-space: nowrap; }
+.mapnode.locked { background: radial-gradient(circle at 35% 30%, #ddd, #8d8aa8 60%, #5d5a78); box-shadow: 0 6px 0 #3c3a52, 0 10px 18px rgba(0,0,0,0.35); color: #fff; }
+.mapnode.locked .num { font-size: 22px; }
+.mapnode.current { animation: nodebounce 1s ease-in-out infinite; }
+.mapnode.current::after { content: "PLAY"; position: absolute; top: -24px; font-size: 12px; font-weight: 900; background: #fff; color: #c2416b; padding: 2px 8px; border-radius: 8px; }
+@keyframes nodebounce { 50% { transform: translateX(-50%) translateY(-8px); } }
+.goallist { text-align: left; margin-bottom: 14px; }
+.goalline { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: rgba(255,255,255,0.07); border-radius: 12px; margin-bottom: 6px; font-weight: 700; }
+.goalline .gi { font-size: 24px; width: 30px; text-align: center; }
+.goallist .tip { margin: 10px 2px 0; font-size: 14px; color: #ffe27a; }
+.jellyicon { display: inline-block; width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg, #ff9ad5, #ff4fa0); vertical-align: middle; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.15); }
+
+/* ===== Fruit Swap: level screen ===== */
+.fsgoals { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px; }
+.goalchip {
+  display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 17px;
+  background: rgba(27,20,70,0.65); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.18);
+}
+.goalchip .gi { font-size: 22px; }
+.goalchip b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.goalchip.ok { box-shadow: inset 0 0 0 2px #3ee08f; }
+.goalchip.ok b { color: #3ee08f; }
+.fsscene ~ .fsbar { grid-template-columns: 1fr 1fr; }
+.bdval.low { color: #ff5d73; animation: pulse 1s infinite; }
+.fsmeter { position: relative; overflow: visible; }
+.fsmeter b { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; font-size: 16px; line-height: 18px; text-align: center; color: rgba(255,255,255,0.4); }
+.fsmeter b::before { content: "\2605"; }
+.fsmeter b.lit { color: #ffcf3f; text-shadow: 0 0 8px rgba(255,207,63,0.9); }
+.fstile.hole { background: transparent !important; visibility: hidden; }
+.fstile.jelly1 { background: linear-gradient(135deg, rgba(255,154,213,0.75), rgba(255,79,160,0.6)); box-shadow: inset 0 -3px 0 rgba(150,0,80,0.25); }
+.fstile.jelly2 { background: linear-gradient(135deg, rgba(232,70,170,0.95), rgba(170,20,110,0.9)); box-shadow: inset 0 0 0 3px rgba(255,255,255,0.35), inset 0 -3px 0 rgba(100,0,60,0.4); }
+.fstile.crate { background: rgba(120,72,30,0.55); font-size: min(9vw, 44px); }
+.fstile.crate2 { box-shadow: inset 0 0 0 3px #c9c9d6, inset 0 0 0 6px rgba(80,80,100,0.6); }
+.fstile.nut { filter: drop-shadow(0 0 6px rgba(255,220,120,0.9)); }
+.fstile.sp-bomb::after {
+  content: ""; position: absolute; inset: 6%; border-radius: 50%; pointer-events: none;
+  border: 3px dashed rgba(255,255,255,0.9); box-shadow: 0 0 10px rgba(255,207,63,0.9), inset 0 0 10px rgba(255,207,63,0.7);
+  animation: bombspin 3s linear infinite;
+}
+@keyframes bombspin { to { transform: rotate(360deg); } }
+.fstile.smashable { animation: smashwiggle 0.5s ease-in-out infinite; }
+@keyframes smashwiggle { 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
+.boostbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.boost {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 4px; border-radius: 14px;
+  font-size: 22px; background: rgba(27,20,70,0.6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: #fff;
+}
+.boost span { font-size: 12px; font-weight: 700; }
+.boost em { position: absolute; top: -6px; right: -4px; font-style: normal; font-size: 12px; font-weight: 900; background: #ff4f9a; color: #fff; border-radius: 999px; min-width: 22px; padding: 2px 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+.boost .plus5 { font-size: 16px; padding: 2px 6px; }
+.boost:disabled { opacity: 0.4; }
+.boost.on { background: linear-gradient(135deg, #ffcf3f, #ff7a2f); color: #3a1600; }
+.beam { position: absolute; z-index: 41; pointer-events: none; animation: beam 0.45s ease-out forwards; }
+.beam.h { height: 18px; margin-top: -9px; background: linear-gradient(180deg, transparent, #fff 40%, #fff 60%, transparent); box-shadow: 0 0 22px 6px rgba(255,207,63,0.9); }
+.beam.v { width: 18px; margin-left: -9px; background: linear-gradient(90deg, transparent, #fff 40%, #fff 60%, transparent); box-shadow: 0 0 22px 6px rgba(255,207,63,0.9); animation-name: beamv; }
+@keyframes beam { 0% { opacity: 0; transform: scale(0.2, 1); } 30% { opacity: 1; transform: scale(1, 1); } 100% { opacity: 0; transform: scale(1, 0.2); } }
+@keyframes beamv { 0% { opacity: 0; transform: scale(1, 0.2); } 30% { opacity: 1; transform: scale(1, 1); } 100% { opacity: 0; transform: scale(0.2, 1); } }
+.ring { position: absolute; z-index: 41; border-radius: 50%; transform: translate(-50%, -50%) scale(0.2); border: 6px solid #ffcf3f; box-shadow: 0 0 30px rgba(255,207,63,0.9), inset 0 0 20px rgba(255,255,255,0.8); animation: ring 0.55s ease-out forwards; pointer-events: none; }
+.ring.starring { border-color: #fff; box-shadow: 0 0 40px rgba(255,79,154,0.9), inset 0 0 30px rgba(255,207,63,0.9); }
+@keyframes ring { 0% { opacity: 1; transform: translate(-50%, -50%) scale(0.2); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1); } }
