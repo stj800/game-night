@@ -754,7 +754,7 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .rumtable { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; min-height: 70px; max-height: 32vh; overflow-y: auto; padding: 4px 2px; }
 .rumempty { color: #b9e6cc; font-size: 13px; margin: 18px auto; }
 .rummeld { display: flex; padding: 4px 6px 4px 4px; background: rgba(0,0,0,0.18); border-radius: 10px; border-bottom: 3px solid var(--c); }
-.rummeld .pcard + .pcard { margin-left: -20px; }
+.rummeld .pcard + .pcard, .rummcards .pcard + .pcard { margin-left: -20px; }
 .rummeld.can { background: rgba(255,207,63,0.35); box-shadow: 0 0 0 2px #ffcf3f, 0 0 14px rgba(255,207,63,0.8); animation: rumglow 1s ease-in-out infinite alternate; }
 @keyframes rumglow { to { box-shadow: 0 0 0 2px #fff, 0 0 20px rgba(255,207,63,1); } }
 .rumpiles { display: flex; gap: 10px; align-items: center; margin: 10px 0 2px; }
@@ -824,3 +824,19 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .rumgmelds:empty { display: none; }
 .rumtable { flex-direction: column; flex-wrap: nowrap; gap: 6px; max-height: 38vh; }
 .pcard.lo::after { content: ''; position: absolute; bottom: 3px; left: 3px; width: 10px; height: 10px; border-radius: 50%; background: var(--lc); border: 2px solid #fff; }
+.rummcards { display: flex; }
+.rummeld.layoff { flex-direction: column; align-items: flex-start; gap: 2px; border-bottom-style: dashed; }
+.rumlotag { font-size: 10px; color: #e8fff1; font-weight: 600; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.rumtopbtns { display: flex; gap: 8px; }
+.rumdisc .pcard { transform-origin: 50% 60%; }
+.rumsound { display: grid; gap: 14px; margin: 4px 0 6px; text-align: left; }
+.rumsrow { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.rumsrow:last-child { border-bottom: 0; }
+.rumslabel { display: flex; flex-direction: column; }
+.rumslabel span { font-size: 12px; color: var(--muted); }
+.rumvol { display: flex; align-items: center; gap: 8px; }
+.rumslider { flex: 1; accent-color: #ffcf3f; height: 28px; }
+.pcard.flying { box-shadow: 0 10px 22px rgba(0,0,0,0.5); }
+.rumsound, .rumsrow, .rumvol { min-width: 0; max-width: 100%; }
+.rumslider { min-width: 0; width: 100%; -webkit-appearance: auto; }
+.rumvol span { flex: none; }

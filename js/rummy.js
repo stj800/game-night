@@ -548,7 +548,7 @@ var Rummy = (function () {
   }
   function cardEl(c, cls) {
     var r = E.RANKS[E.rank(c)], su = E.SUITS[E.suit(c)];
-    return h('div', { class: 'pcard ' + (E.red(c) ? 'red ' : '') + (cls || '') }, [
+    return h('div', { class: 'pcard ' + (E.red(c) ? 'red ' : '') + (cls || ''), 'data-c': c }, [
       h('span', { class: 'pc-tl', html: r + '<br>' + su }), h('span', { class: 'pc-mid', text: su })
     ]);
   }
@@ -592,7 +592,9 @@ var Rummy = (function () {
   // The card table. src supplies the current view (full state for the host, private view for guests).
   function table(root, src) {
     var scene = h('div', { class: 'rumscene' }); root.appendChild(scene);
-    root.appendChild(UI.topbar('Rummy 500', src.back, h('button', { class: 'iconbtn', html: '&#128202;', 'aria-label': 'Scores', onclick: scoreSheet })));
+    root.appendChild(UI.topbar('Rummy 500', src.back, h('div', { class: 'rumtopbtns' }, [
+      h('button', { class: 'iconbtn', html: '&#127926;', 'aria-label': 'Music and sound', onclick: soundPanel }),
+      h('button', { class: 'iconbtn', html: '&#128202;', 'aria-label': 'Scores', onclick: scoreSheet })])));
     var netEl = h('div', { class: 'rumnet' });
     var opp = h('div', { class: 'rumopp' }), status = h('div', { class: 'status rumstatus' }), tbl = h('div', { class: 'rumtable' });
     var piles = h('div', { class: 'rumpiles' }), stockEl = h('button', { class: 'rumstock' }), discEl = h('div', { class: 'rumdisc' });
@@ -605,7 +607,7 @@ var Rummy = (function () {
     var btnSort = h('button', { onclick: function () { sortMode = sortMode === 'suit' ? 'rank' : 'suit'; UI.store('rum_sort', sortMode); render(); } });
     var btnHint = h('button', { text: 'Hint', onclick: doHint });
     [btnMeld, btnDisc, btnSort, btnHint].forEach(function (b) { acts.appendChild(b); });
-    stockEl.addEventListener('click', function () { if (myDraw()) { Sound.play('land'); src.act('stock'); } });
+    stockEl.addEventListener('click', function () { if (myDraw()) src.act('stock'); });
 
     function S() { return src.view(); }
     function seat() { return src.seat(); }
@@ -630,8 +632,122 @@ var Rummy = (function () {
       return m || '';
     }
 
+    // ---------- card motion: deals, draws, melds and the discard throw ----------
+    var prevS = null, flying = {}, calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function rectOf(el, w) {
+      if (!el) return null;
+      var r = el.getBoundingClientRect(); if (!r.width && !r.height) return null;
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: w || el.offsetWidth || r.width };
+    }
+    function snap() {
+      var b = { hand: {}, disc: {}, chip: {}, stock: rectOf(stockEl.firstChild), handBox: rectOf(handEl, 52) };
+      Array.prototype.forEach.call(handEl.querySelectorAll('.pcard'), function (el) { b.hand[el.getAttribute('data-c')] = rectOf(el); });
+      Array.prototype.forEach.call(discEl.querySelectorAll('.pcard'), function (el) { b.disc[el.getAttribute('data-c')] = rectOf(el); });
+      Array.prototype.forEach.call(opp.querySelectorAll('.rumchip'), function (el) { b.chip[el.getAttribute('data-seat')] = rectOf(el, 24); });
+      return b;
+    }
+    function tiltOf(c) { return ((c * 37) % 13 - 6) * 0.9; }
+    function hideFlying() {
+      var now = Date.now();
+      Object.keys(flying).forEach(function (c) {
+        if (flying[c] < now) { delete flying[c]; return; }
+        Array.prototype.forEach.call(root.querySelectorAll('.pcard[data-c="' + c + '"]:not(.flying)'), function (x) { x.style.visibility = 'hidden'; });
+      });
+    }
+    function flyTo(el, from, o) {
+      if (calm || !el || !from || !el.animate) return;
+      var to = rectOf(el); if (!to) return;
+      var c = el.getAttribute('data-c'), w = el.offsetWidth, hh = el.offsetHeight, g = el.cloneNode(true);
+      g.classList.remove('sel', 'hint', 'must', 'tap', 'fresh'); g.classList.add('flying');
+      g.style.cssText = 'position:fixed;margin:0;left:' + (to.x - w / 2) + 'px;top:' + (to.y - hh / 2) + 'px;width:' + w + 'px;height:' + hh + 'px;z-index:3000;pointer-events:none;';
+      document.body.appendChild(g);
+      el.style.visibility = 'hidden';
+      var dx = from.x - to.x, dy = from.y - to.y, sc = from.w && w ? from.w / w : 1, tilt = o.tilt || 0, frames;
+      if (o.kind === 'throw') frames = [
+        { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + sc + ') rotate(0deg)' },
+        { offset: 0.5, transform: 'translate(' + dx * 0.45 + 'px,' + (dy * 0.45 - 80) + 'px) scale(1.3) rotate(220deg)' },
+        { offset: 0.86, transform: 'translate(0px,-5px) scale(1.05) rotate(' + (352 + tilt) + 'deg)' },
+        { transform: 'translate(0px,0px) scale(1) rotate(' + (360 + tilt) + 'deg)' }];
+      else frames = [
+        { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + sc + ')' },
+        { offset: 0.8, transform: 'translate(0px,-8px) scale(1.07)' },
+        { transform: 'translate(0px,0px) scale(1)' }];
+      flying[c] = Date.now() + (o.delay || 0) + o.dur + 50;
+      var a = g.animate(frames, { duration: o.dur, delay: o.delay || 0, easing: o.kind === 'throw' ? 'cubic-bezier(.3,.6,.35,1)' : 'cubic-bezier(.2,.8,.3,1)', fill: 'both' });
+      var done = false;
+      function finish() {
+        if (done) return; done = true;
+        try { a.cancel(); } catch (e) {}
+        g.remove(); delete flying[c];
+        Array.prototype.forEach.call(root.querySelectorAll('.pcard[data-c="' + c + '"]'), function (x) { x.style.visibility = ''; });
+        if (o.land) o.land();
+      }
+      a.onfinish = finish;
+      // Safety net: if the phone pauses animations, the card still lands on time
+      setTimeout(finish, (o.delay || 0) + o.dur + 250);
+    }
+    function ghost(el, from, to, dur, delay) {
+      if (calm || !from || !to || !el.animate) return;
+      el.classList.add('flying');
+      el.style.cssText = 'position:fixed;margin:0;left:' + (to.x - 19) + 'px;top:' + (to.y - 27) + 'px;z-index:3000;pointer-events:none;';
+      document.body.appendChild(el);
+      var a = el.animate([
+        { transform: 'translate(' + (from.x - to.x) + 'px,' + (from.y - to.y) + 'px) scale(1)', opacity: 1 },
+        { transform: 'translate(0px,0px) scale(0.55)', opacity: 0.15 }], { duration: dur, delay: delay || 0, easing: 'cubic-bezier(.3,.7,.4,1)', fill: 'both' });
+      a.onfinish = function () { el.remove(); };
+      setTimeout(function () { el.remove(); }, (delay || 0) + dur + 250);
+    }
+    function back() { return h('div', { class: 'pcard sm back' }); }
+    function deal(b, s) {
+      var mySeat = seat(), n = s.players.length, cards = Array.prototype.slice.call(handEl.querySelectorAll('.pcard')), per = cards.length, idx = 0;
+      for (var k = 0; k < per; k++) for (var j = 0; j < n; j++) {
+        var who = (s.dealer + 1 + j) % n, d = idx++ * 55;
+        if (who === mySeat) flyTo(cards[k], b.stock, { dur: 380, delay: d });
+        else if (k < s.players[who].hand.length) ghost(back(), b.stock, b.chip[who], 360, d);
+        if (idx % 3 === 1) setTimeout(function () { Sound.play('flick'); }, d);
+      }
+    }
+    function animate(b, s) {
+      var mySeat = seat(), my = me(), tableNow = {};
+      s.melds.forEach(function (m) { m.cards.forEach(function (c) { tableNow[c] = m; }); });
+      var p = prevS;
+      prevS = { gid: s.gid, round: s.round, turn: s.turn, disc: s.discard.slice(), stockN: s.stock.length, table: tableNow, hand: my.hand.slice() };
+      if (!b.stock) return;
+      if (!p || p.gid !== s.gid || p.round !== s.round) {
+        if (!s.melds.length && s.discard.length === 1 && s.phase === 'draw') deal(b, s);
+        return;
+      }
+      var actor = p.turn, actorFrom = actor === mySeat ? b.handBox : b.chip[actor], delay = 0;
+      var stockDrop = p.stockN - s.stock.length;
+      var pileTaken = p.disc.filter(function (c) { return s.discard.indexOf(c) < 0; });
+      var gained = my.hand.filter(function (c) { return p.hand.indexOf(c) < 0; });
+      if (gained.length) {
+        gained.forEach(function (c, k) {
+          flyTo(handEl.querySelector('.pcard[data-c="' + c + '"]'), pileTaken.indexOf(c) >= 0 ? b.disc[c] : b.stock, { dur: 420, delay: k * 70 });
+        });
+        Sound.play('flick');
+      } else if (actor !== mySeat && actorFrom) {
+        if (stockDrop > 0) { ghost(back(), b.stock, actorFrom, 420); Sound.play('flick'); }
+        pileTaken.forEach(function (c, k) { if (b.disc[c]) ghost(cardEl(c, 'sm'), b.disc[c], actorFrom, 460, k * 60); });
+        if (pileTaken.length) Sound.play('flick');
+      }
+      var newOnTable = Object.keys(tableNow).filter(function (c) { return !p.table[c]; });
+      newOnTable.forEach(function (c, k) {
+        var m = tableNow[c], who = m.lo && m.lo[c] !== undefined ? m.lo[c] : m.by;
+        var from = who === mySeat ? (b.hand[c] || b.handBox) : b.chip[who];
+        flyTo(tbl.querySelector('.pcard[data-c="' + c + '"]'), from, { dur: 460, delay: k * 50 });
+      });
+      if (newOnTable.length) { delay = 220 + newOnTable.length * 50; if (actor !== mySeat) setTimeout(function () { Sound.play('chips'); }, 200); }
+      var top = s.discard[s.discard.length - 1];
+      if (top !== undefined && p.disc.indexOf(top) < 0) {
+        var from = actor === mySeat ? (b.hand[top] || b.handBox) : actorFrom;
+        flyTo(discEl.lastChild, from, { dur: 620, delay: delay, kind: 'throw', tilt: tiltOf(top), land: function () { Sound.play('slap'); } });
+      }
+    }
+
     function render() {
       if (!document.body.contains(scene)) return;
+      var before = snap();
       var s = S(), info = src.info(), mySeat = seat(), my = me();
       // fresh cards (just drawn)
       if (prevHand) {
@@ -649,7 +765,7 @@ var Rummy = (function () {
         if (i === mySeat) return;
         var partner = s.teams && p.team === my.team, inf = info ? info[i] : null;
         var tag = inf ? (inf.kind === 'bot' ? ' \u00B7 computer' : !inf.on ? ' \u00B7 away' : '') : '';
-        opp.appendChild(h('div', { class: 'rumchip' + (s.turn === i && (s.phase === 'draw' || s.phase === 'play') ? ' on' : '') + (inf && !inf.on ? ' away' : ''), style: '--c:' + COLORS[i] }, [
+        opp.appendChild(h('div', { 'data-seat': i, class: 'rumchip' + (s.turn === i && (s.phase === 'draw' || s.phase === 'play') ? ' on' : '') + (inf && !inf.on ? ' away' : ''), style: '--c:' + COLORS[i] }, [
           h('b', { text: cp(AV[i]) + ' ' + p.name + (partner ? ' (partner)' : '') }),
           h('span', { text: p.hand.length + ' cards' + (s.teams ? '' : ' \u00B7 ' + p.score) + tag })
         ]));
@@ -679,29 +795,44 @@ var Rummy = (function () {
         ]);
         rowsBy[i] = row.lastChild; tbl.appendChild(row);
       });
+      // Like a real table: a meld sits in front of the player who made it, and a card laid off on someone
+      // else's meld sits in front of the player who laid it off ("on Ava's 10s"). Tap either one to lay off.
+      function meldName(md) {
+        var owner = md.by === mySeat ? 'your' : s.players[md.by].name + "'s";
+        var base = md.cards.filter(function (c) { return !(md.lo && md.lo[c] !== undefined && md.lo[c] !== md.by); });
+        if (md.type === 'set') return 'on ' + owner + ' ' + E.RANKS[E.rank(md.cards[0])] + 's';
+        return 'on ' + owner + ' ' + E.SUITS[E.suit(md.cards[0])] + ' run';
+      }
       s.melds.forEach(function (md, mi) {
         var ok = one !== null && myTurn() && s.phase === 'play' && E.layOffResult(md, one);
-        var g = h('button', { class: 'rummeld' + (ok ? ' can' : ''), style: '--c:' + COLORS[md.by] });
-        md.cards.forEach(function (c) {
-          var who = md.lo && md.lo[c] !== undefined ? md.lo[c] : null;
-          var el = cardEl(c, 'sm' + (who !== null && who !== md.by ? ' lo' : ''));
-          if (who !== null && who !== md.by) { el.style.setProperty('--lc', COLORS[who]); el.title = 'Laid off by ' + s.players[who].name; }
-          g.appendChild(el);
-        });
-        g.addEventListener('click', function () {
+        function tapMeld() {
           if (!myTurn() || S().phase !== 'play') return;
           if (one === null) { UI.toast('Select one card from your hand, then tap a meld to lay it off.'); return; }
           if (!ok) { UI.toast(E.label(one) + ' does not fit that meld.'); Sound.play('nope'); return; }
           Sound.play('pop', 3); sel = []; hintMsg = ''; src.act('layoff', [one, mi]);
+        }
+        var groups = {};
+        md.cards.forEach(function (c) {
+          var who = md.lo && md.lo[c] !== undefined ? md.lo[c] : md.by;
+          (groups[who] = groups[who] || []).push(c);
         });
-        (rowsBy[md.by] || tbl).appendChild(g);
+        Object.keys(groups).forEach(function (k) {
+          var who = +k, isOwner = who === md.by;
+          var g = h('button', { class: 'rummeld' + (isOwner ? '' : ' layoff') + (ok ? ' can' : ''), style: '--c:' + COLORS[md.by] });
+          var cardsBox = h('span', { class: 'rummcards' });
+          groups[k].forEach(function (c) { cardsBox.appendChild(cardEl(c, 'sm')); });
+          g.appendChild(cardsBox);
+          if (!isOwner) g.appendChild(h('span', { class: 'rumlotag', text: meldName(md) }));
+          g.addEventListener('click', tapMeld);
+          (rowsBy[who] || tbl).appendChild(g);
+        });
       });
       // piles
       stockEl.innerHTML = ''; stockEl.appendChild(h('div', { class: 'pcard back' }, h('span', { class: 'pc-mid', text: s.stock.length })));
       stockEl.classList.toggle('glow', myDraw());
       discEl.innerHTML = '';
       s.discard.forEach(function (c, i) {
-        var el = cardEl(c, 'sm' + (myDraw() ? ' tap' : ''));
+        var el = cardEl(c, 'sm' + (myDraw() ? ' tap' : '')); el.style.transform = 'rotate(' + tiltOf(c) + 'deg)';
         el.addEventListener('click', function () { takeDiscard(i); });
         discEl.appendChild(el);
       });
@@ -729,6 +860,8 @@ var Rummy = (function () {
       btnDisc.disabled = !(playing && sel.length === 1 && E.canDiscard(s, sel[0]));
       btnSort.textContent = sortMode === 'suit' ? 'Sort: suit' : 'Sort: rank';
       btnHint.disabled = !myTurn();
+      hideFlying();
+      animate(before, s);
       // end of hand / game
       if (s.phase === 'over' || s.phase === 'gameover') {
         var key = s.round + s.phase + (s.gid || '');
@@ -741,10 +874,10 @@ var Rummy = (function () {
       var s = S(), top = i === s.discard.length - 1;
       var picked = s.discard.slice(i), card = picked[0];
       if (!E.canUse(me().hand.concat(picked), card, s.melds)) { Sound.play('nope'); UI.toast('You can only take the ' + E.label(card) + ' if you can play it this turn.'); return; }
-      if (top) { Sound.play('swap'); src.act('pile', i); return; }
+      if (top) { src.act('pile', i); return; }
       var n = picked.length;
       UI.modal({ title: 'Take ' + n + ' cards?', text: 'You get the ' + E.label(card) + ' and the ' + (n - 1) + ' card' + (n > 2 ? 's' : '') + ' above it. You must play the ' + E.label(card) + ' this turn.',
-        buttons: [{ label: 'Take them', cls: 'rummy', fn: function () { Sound.play('swap'); src.act('pile', i); } }, { label: 'Cancel' }] });
+        buttons: [{ label: 'Take them', cls: 'rummy', fn: function () { src.act('pile', i); } }, { label: 'Cancel' }] });
     }
     function doMeld() { var cards = sel.slice(); if (!E.asMeld(cards)) return; Sound.play('combo', 2); sel = []; hint = []; hintMsg = ''; src.act('meld', cards); }
     function doDiscard() {
@@ -754,7 +887,7 @@ var Rummy = (function () {
         else if (c === s.tookTop) UI.toast('You cannot throw back the card you just took.');
         return;
       }
-      Sound.play('land'); sel = []; fresh = {}; hint = []; hintMsg = ''; src.act('discard', c);
+      sel = []; fresh = {}; hint = []; hintMsg = ''; src.act('discard', c);
     }
     function doHint() {
       if (!myTurn()) return;
@@ -816,6 +949,30 @@ var Rummy = (function () {
       UI.modal({ title: head, body: wrap, dismiss: false,
         buttons: [{ label: 'Deal the next hand', cls: 'rummy', fn: function () { src.act('next'); } }] });
     }
+
+    function soundPanel() {
+      var body = h('div', { class: 'rumsound' });
+      function row(label, note, on, setOn, vol, setVol) {
+        var r = h('div', { class: 'rumsrow' }, [h('div', { class: 'rumslabel' }, [h('b', { text: label }), h('span', { text: note })]),
+          UI.seg([{ value: true, label: 'On' }, { value: false, label: 'Off' }], on, function (v) { setOn(v); })]);
+        if (setVol) {
+          var sl = h('input', { type: 'range', min: 0, max: 100, value: Math.round(vol * 100), class: 'rumslider', 'aria-label': label + ' volume' });
+          sl.addEventListener('input', function () { setVol(sl.value / 100); });
+          r.appendChild(h('div', { class: 'rumvol' }, [h('span', { text: '\uD83D\uDD08' }), sl, h('span', { text: '\uD83D\uDD0A' })]));
+        }
+        return r;
+      }
+      body.appendChild(row('Music', 'Vegas lounge band', Sound.prefs.music, Sound.setMusic, Sound.getVolume(), Sound.setVolume));
+      body.appendChild(row('Casino chatter', 'Crowd, chips, a slot bell far off', Sound.prefs.chat !== false, Sound.setChat, Sound.getChatVol(), Sound.setChatVol));
+      body.appendChild(row('Card sounds', 'Shuffles, flicks and slaps', Sound.prefs.sfx, Sound.setSfx));
+      UI.modal({ title: 'Music and sound', body: body, buttons: [{ label: 'Done', cls: 'rummy' }] });
+    }
+    function startAudio() { Sound.playMusic('lounge', scene); Sound.startChatter(scene); }
+    startAudio();
+    root.addEventListener('pointerdown', function unlock() {
+      if (!document.body.contains(scene)) { root.removeEventListener('pointerdown', unlock); return; }
+      startAudio();
+    });
 
     onUpdate = function () { render(); };
     window.addEventListener('resize', function () { if (document.body.contains(scene)) render(); });
