@@ -148,9 +148,9 @@ var Swap = (function () {
     // Start music on the first tap INSIDE this screen only (a listener on #app would outlive the screen)
     root.addEventListener('pointerdown', function first() {
       if (!document.body.contains(scene)) { root.removeEventListener('pointerdown', first); return; }
-      Sound.playMusic(W.song); Sound.unlockVoice();
+      Sound.playMusic(W.song, scene); Sound.unlockVoice();
     });
-    Sound.playMusic(W.song);
+    Sound.playMusic(W.song, scene);
     return scene;
   }
 

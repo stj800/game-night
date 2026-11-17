@@ -74,40 +74,56 @@ var Sound = (function () {
     orchard: { bpm: 116, shift: 0, lead: 'triangle', arp: 'square', swing: 0 },
     tropical: { bpm: 124, shift: 5, lead: 'square', arp: 'triangle', swing: 0.08 },
     night: { bpm: 104, shift: -3, lead: 'sine', arp: 'triangle', swing: 0 },
-    blocks: { bpm: 138, shift: 2, lead: 'square', arp: 'sawtooth', swing: 0 }
+    blocks: { bpm: 138, shift: 2, lead: 'square', arp: 'sawtooth', swing: 0 },
+    // Calm garden tune for Mahjong: pentatonic melody, soft pads, no drums
+    zen: { bpm: 80, shift: 0, lead: 'sine', arp: 'triangle', swing: 0, calm: true,
+      chords: [[45, 52, 57], [43, 50, 55], [41, 48, 53], [43, 50, 55]],
+      melody: [[76, 0, 0, 0, 79, 0, 81, 0, 0, 0, 79, 0, 76, 0, 0, 0], [74, 0, 0, 0, 76, 0, 79, 0, 0, 0, 76, 0, 74, 0, 72, 0],
+               [69, 0, 0, 0, 72, 0, 74, 0, 0, 0, 76, 0, 79, 0, 0, 0], [76, 0, 74, 0, 72, 0, 0, 0, 74, 0, 0, 0, 0, 0, 0, 0]],
+      melodyB: [[81, 0, 0, 0, 84, 0, 81, 0, 79, 0, 0, 0, 76, 0, 0, 0], [79, 0, 0, 0, 81, 0, 79, 0, 76, 0, 74, 0, 0, 0, 0, 0],
+               [72, 0, 74, 0, 76, 0, 0, 0, 79, 0, 0, 0, 81, 0, 0, 0], [79, 0, 0, 0, 76, 0, 0, 0, 74, 0, 0, 0, 0, 0, 0, 0]] }
   };
 
   function schedule() {
     if (!song || !ctx) return;
+    // Music belongs to one screen: if that screen is gone, the music stops itself
+    if (owner && !document.body.contains(owner)) { stopMusic(); return; }
     var spb = 60 / song.bpm / 4; // seconds per 16th step
     while (nextTime < ctx.currentTime + 0.15) {
       var s = step % 128, bar = Math.floor(s / 16) % 4, i = s % 16, half = s >= 64, t = nextTime;
       if (i % 2 === 1) t += song.swing * spb;
-      var sh = song.shift, ch = CHORDS[bar];
-      // drums
-      if (i % 4 === 0) kick(t);
-      if (i % 2 === 1) noise(musicBus, t, 0.04, 0.12, 'highpass', 8000);
-      if (i === 4 || i === 12) noise(musicBus, t, 0.12, 0.22, 'bandpass', 1800);
+      var sh = song.shift, ch = (song.chords || CHORDS)[bar];
+      if (!song.calm) {
+        if (i % 4 === 0) kick(t);
+        if (i % 2 === 1) noise(musicBus, t, 0.04, 0.12, 'highpass', 8000);
+        if (i === 4 || i === 12) noise(musicBus, t, 0.12, 0.22, 'bandpass', 1800);
+      } else if (i === 0) {
+        ch.forEach(function (n) { tone(musicBus, t, n + sh, spb * 15, 'sine', 0.07, { attack: 0.4, lp: 1600 }); });
+      }
       // bass
-      if (i % 4 === 0 || i === 6 || i === 14) tone(musicBus, t, ch[0] - 12 + sh, spb * 1.8, 'triangle', 0.5, { lp: 900 });
+      if (song.calm ? i === 0 || i === 8 : (i % 4 === 0 || i === 6 || i === 14)) tone(musicBus, t, ch[0] - 12 + sh, spb * (song.calm ? 7 : 1.8), 'triangle', song.calm ? 0.3 : 0.5, { lp: 900 });
       // arpeggio
-      tone(musicBus, t, ch[i % 3] + 12 + sh + (i % 6 === 5 ? 12 : 0), spb * 0.9, song.arp, 0.08, { lp: 2400 });
+      if (!song.calm || i % 2 === 0) tone(musicBus, t, ch[i % 3] + 12 + sh + (i % 6 === 5 ? 12 : 0), spb * (song.calm ? 3 : 0.9), song.arp, song.calm ? 0.05 : 0.08, { lp: 2400 });
       // lead
-      var m = (half ? MELODY_B : MELODY)[bar][i];
-      if (m) tone(musicBus, t, m + sh, spb * 1.9, song.lead, 0.2, { lp: 3800, detune: 4 });
+      var m = (half ? (song.melodyB || MELODY_B) : (song.melody || MELODY))[bar][i];
+      if (m) tone(musicBus, t, m + sh, spb * (song.calm ? 5 : 1.9), song.lead, song.calm ? 0.16 : 0.2, { lp: 3800, detune: 4, attack: song.calm ? 0.05 : 0.008 });
       nextTime += spb; step++;
     }
   }
 
-  function playMusic(name) {
+  // owner = the element of the screen the music belongs to. Only ONE song can ever run.
+  var owner = null;
+  function playMusic(name, ownerEl) {
     if (!init()) return;
     var next = SONGS[name] || SONGS.orchard;
+    if (ownerEl) owner = ownerEl;
     if (song === next && timer) return;
-    stopMusic();
+    stopMusic(); if (ownerEl) owner = ownerEl;
     song = next; step = 0; nextTime = ctx.currentTime + 0.1;
     timer = setInterval(schedule, 25);
   }
-  function stopMusic() { clearInterval(timer); timer = null; song = null; }
+  function stopMusic() { clearInterval(timer); timer = null; song = null; owner = null; }
+  window.addEventListener('pagehide', function () { stopMusic(); if (ctx) ctx.suspend(); });
 
   // ---------- Sound effects ----------
   var sfx = {

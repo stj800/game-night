@@ -14,7 +14,7 @@
     root.appendChild(h('div', { class: 'hero' }, [
       h('img', { class: 'logo', src: 'icon-180.png', alt: '', width: 84, height: 84 }),
       h('h1', { text: 'Game Night' }),
-      h('p', { text: 'Five games. Three levels each. Play the computer or a friend.' })
+      h('p', { text: 'Six games. Three levels each. Play the computer or a friend.' })
     ]));
     var cards = h('div', { class: 'gamecards' });
     [
@@ -22,7 +22,8 @@
       { id: 'checkers', glyph: '\u26C2\uFE0E', name: 'Checkers', desc: 'Jumps, double jumps and kings' },
       { id: 'sudoku', glyph: '9', name: 'Sudoku', desc: 'Fresh puzzle every time, with notes and hints' },
       { id: 'blocks', glyph: String.fromCharCode(0x25A6), name: 'Block Drop', desc: 'Stack falling blocks and clear rows' },
-      { id: 'swap', glyph: String.fromCodePoint(0x1F353), name: 'Fruit Swap', desc: 'Match 3 fruits, set off combos' }
+      { id: 'swap', glyph: String.fromCodePoint(0x1F353), name: 'Fruit Swap', desc: 'Match 3 fruits, set off combos' },
+      { id: 'mahjong', glyph: String.fromCodePoint(0x1F004), name: 'Mahjong', desc: 'Match tile pairs, with a step-by-step lesson' }
     ].forEach(function (gm) {
       cards.appendChild(h('button', { class: 'gamecard ' + gm.id, onclick: function () { location.hash = '#/' + gm.id; } }, [
         h('div', { class: 'glyph', text: gm.glyph }),
@@ -45,6 +46,7 @@
     'chess': Chess.setup, 'chess/play': Chess.play, 'chess/learn': function (r) { Chess.learn(r, 0); },
     'checkers': Checkers.setup, 'checkers/play': Checkers.play, 'checkers/learn': Checkers.learn,
     'sudoku': Sudoku.setup, 'sudoku/play': Sudoku.play, 'sudoku/learn': Sudoku.learn,
+    'mahjong': Mahjong.setup, 'mahjong/play': Mahjong.play, 'mahjong/learn': Mahjong.learn,
     'blocks': Blocks.setup, 'blocks/play': Blocks.play, 'swap': Swap.setup, 'swap/play': Swap.play
   };
 
