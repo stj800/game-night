@@ -14,7 +14,7 @@
     root.appendChild(h('div', { class: 'hero' }, [
       h('img', { class: 'logo', src: 'icon-180.png', alt: '', width: 84, height: 84 }),
       h('h1', { text: 'Game Night' }),
-      h('p', { text: 'Six games. Three levels each. Play the computer or a friend.' })
+      h('p', { text: 'Six games. Three levels each. Beat the computer, clear the board.' })
     ]));
     var cards = h('div', { class: 'gamecards' });
     [

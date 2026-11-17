@@ -145,12 +145,9 @@ var Checkers = (function () {
     var noteEl = h('p', { class: 'levelnote' });
     function setNote() { noteEl.textContent = LEVELS[cfg.level - 1].note; }
     var lp = h('div', { class: 'panel' }, [h('h3', { text: 'Level' }), UI.seg(LEVELS, cfg.level, function (v) { cfg.level = v; setNote(); }), noteEl]);
-    root.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Opponent' }),
-      UI.seg([{ value: 'ai', label: 'Computer' }, { value: 'pp', label: 'Friend (same phone)' }], cfg.mode,
-        function (v) { cfg.mode = v; lp.style.display = v === 'ai' ? '' : 'none'; })]));
-    root.appendChild(lp); setNote(); lp.style.display = cfg.mode === 'ai' ? '' : 'none';
+    root.appendChild(lp); setNote();
     root.appendChild(h('button', { class: 'bigbtn checkers', text: 'Start game', onclick: function () {
-      UI.store('ck_cfg', cfg); UI.store('ck_game', { mode: cfg.mode, level: cfg.level, hist: [] }); location.hash = '#/checkers/play';
+      UI.store('ck_cfg', cfg); UI.store('ck_game', { mode: 'ai', level: cfg.level, hist: [] }); location.hash = '#/checkers/play';
     } }));
     var saved = UI.store('ck_game');
     if (saved && saved.hist && saved.hist.length) root.appendChild(h('button', { class: 'ghostbtn', text: 'Continue your last game',
@@ -161,7 +158,7 @@ var Checkers = (function () {
   function play(root) {
     var g = UI.store('ck_game');
     if (!g) { location.hash = '#/checkers'; return; }
-    var ai = g.mode === 'ai', s = initial(), hist = [], sel = -1, last = null, hint = null, thinking = false, over = false;
+    var ai = true, s = initial(), hist = [], sel = -1, last = null, hint = null, thinking = false, over = false;
     g.hist.forEach(function (m) { hist.push(s); s = apply(s, m); last = m.path; });
     root.appendChild(UI.topbar(ai ? 'Checkers vs Computer' : 'Checkers - 2 players', '#/checkers'));
     var statusEl = h('div', { class: 'status' }), boardEl = h('div', { class: 'board checkers-board' });

@@ -56,17 +56,13 @@ var Chess = (function () {
     var colorPanel = h('div', { class: 'panel' }, [h('h3', { text: 'You play' }),
       UI.seg([{ value: 'w', label: 'White' }, { value: 'b', label: 'Black' }, { value: 'r', label: 'Random' }], cfg.color,
         function (v) { cfg.color = v; })]);
-    function showAi() { levelPanel.style.display = colorPanel.style.display = cfg.mode === 'ai' ? '' : 'none'; }
-    root.appendChild(h('div', { class: 'panel' }, [h('h3', { text: 'Opponent' }),
-      UI.seg([{ value: 'ai', label: 'Computer' }, { value: 'pp', label: 'Friend (same phone)' }], cfg.mode,
-        function (v) { cfg.mode = v; showAi(); })]));
     root.appendChild(levelPanel);
     root.appendChild(colorPanel);
-    setNote(); showAi();
+    setNote();
     root.appendChild(h('button', { class: 'bigbtn chess', text: 'Start game', onclick: function () {
       UI.store('chess_cfg', cfg);
       var human = cfg.color === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : cfg.color;
-      UI.store('chess_game', { mode: cfg.mode, level: cfg.level, human: human, moves: [] });
+      UI.store('chess_game', { mode: 'ai', level: cfg.level, human: human, moves: [] });
       location.hash = '#/chess/play';
     } }));
     if (saved && saved.moves && saved.moves.length) {
@@ -80,7 +76,7 @@ var Chess = (function () {
   function play(root) {
     var g = UI.store('chess_game');
     if (!g) { location.hash = '#/chess'; return; }
-    var ai = g.mode === 'ai', human = g.human || 'w';
+    var ai = true, human = g.human || 'w'; // computer opponent only
     var s = E.initial(), hist = [], reps = {}, sel = -1, targets = [], hint = null, thinking = false, over = false;
     var flipped = ai && human === 'b';
     reps[E.key(s)] = 1;
