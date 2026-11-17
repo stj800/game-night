@@ -130,10 +130,24 @@ var Mahjong = (function () {
     var faces = [];
     Object.keys(groups).forEach(function (k) { var g = groups[k]; for (var i = 0; i + 1 < g.length; i += 2) faces.push([g[i], g[i + 1]]); });
     var dealt = deal(live, faces);
-    if (!dealt) return false;
-    dealt.forEach(function (d, i) { live[i].face = d.face; live[i].match = d.match; });
-    // deal() returns tiles in the same order as the positions passed in
-    return true;
+    if (dealt && availablePairs(dealt).length) {
+      dealt.forEach(function (d, i) { live[i].face = d.face; live[i].match = d.match; }); // same order as positions
+      return 'shuffled';
+    }
+    // Some leftover piles can never be solved where they sit (e.g. a matching pair stacked on itself).
+    // Spread the remaining tiles flat into rows: rows can always be finished.
+    var n = live.length, perRow = Math.min(6, Math.max(2, Math.ceil(Math.sqrt(n * 1.5)))), flat = [];
+    var rows = Math.ceil(n / perRow);
+    for (var r = 0, k = 0; r < rows; r++) {
+      var inRow = Math.min(perRow, n - k); if (inRow === 1 && r > 0) { flat[flat.length - 1].y = flat[flat.length - 1].y; }
+      var x0 = (perRow - inRow); // center the row (half-tile units)
+      for (var c = 0; c < inRow; c++, k++) flat.push({ x: x0 + c * 2, y: r * 2, z: 0 });
+    }
+    // a lone tile on the last row would be fine, but keep pairs together: move it onto the previous row's end
+    var re = deal(flat, faces);
+    if (!re) return false;
+    re.forEach(function (d, i) { live[i].x = d.x; live[i].y = d.y; live[i].z = d.z; live[i].face = d.face; live[i].match = d.match; });
+    return 'spread';
   }
 
   // ---------- Board rendering ----------
@@ -163,25 +177,57 @@ var Mahjong = (function () {
   }
 
   // ---------- Garden scene ----------
+  // Ancient Chinese city at dusk: mountains, pagodas, a walled city with a gate, lantern strings, sky lanterns, fireworks
+  function pagoda(tiers, w, cls) {
+    var p = h('div', { class: 'pagoda ' + (cls || '') }); p.style.width = w + 'px';
+    p.appendChild(h('i', { class: 'spire' }));
+    for (var k = 0; k < tiers; k++) {
+      var tw = Math.round(w * (0.55 + 0.45 * (k + 1) / tiers));
+      var tier = h('div', { class: 'tier' }, [h('i', { class: 'roof' }), h('i', { class: 'body' }, h('b', { class: 'win' }))]);
+      tier.style.width = tw + 'px'; p.appendChild(tier);
+    }
+    return p;
+  }
   function scene(root) {
-    var sc = h('div', { class: 'fsscene theme-garden' });
-    sc.appendChild(h('span', { class: 'gmoon' }));
-    sc.appendChild(h('span', { class: 'gmount m1' })); sc.appendChild(h('span', { class: 'gmount m2' }));
-    sc.appendChild(h('span', { class: 'gpond' }));
-    [[6, 0x1F3EE], [80, 0x1F3EE], [44, 0x1F3EE]].forEach(function (l, k) { var e = h('span', { class: 'lantern', text: cp(l[1]) }); e.style.left = l[0] + '%'; e.style.animationDelay = (-k * 0.7) + 's'; sc.appendChild(e); });
-    [0x1F338, 0x1F338, 0x1F33F, 0x1F338, 0x1FAB7, 0x1F338].forEach(function (c, k) { var e = h('span', { class: 'groundflower', text: cp(c) }); e.style.left = (4 + k * 17) + '%'; e.style.bottom = (1 + (k % 2) * 3) + '%'; sc.appendChild(e); });
-    sc.appendChild(h('span', { class: 'decor gtree', text: cp(0x1F338) }));
+    var sc = h('div', { class: 'fsscene theme-city' });
+    sc.appendChild(h('span', { class: 'cmoon' }));
+    for (var st = 0; st < 26; st++) { var d = h('i', { class: 'twinkle' }); d.style.left = Math.random() * 100 + '%'; d.style.top = Math.random() * 30 + '%'; d.style.animationDelay = Math.random() * 3 + 's'; sc.appendChild(d); }
+    sc.appendChild(h('span', { class: 'cmount m1' })); sc.appendChild(h('span', { class: 'cmount m2' })); sc.appendChild(h('span', { class: 'cmount m3' }));
+    // distant skyline of pagodas
+    var far = h('div', { class: 'skyline far' });
+    [[3, 40], [5, 56], [2, 30], [4, 46], [3, 36], [6, 64], [2, 28], [4, 44]].forEach(function (t) { far.appendChild(pagoda(t[0], t[1], 'dark')); });
+    sc.appendChild(far);
+    // city wall with battlements and the great gate
+    var wall = h('div', { class: 'citywall' }, [h('div', { class: 'battlements' }), h('div', { class: 'gate' }, [h('i', { class: 'gateroof' }), h('i', { class: 'arch' })])]);
+    sc.appendChild(wall);
+    // near pagodas, red and gold
+    var left = pagoda(5, 96, 'near left'); var right = pagoda(4, 84, 'near right');
+    sc.appendChild(left); sc.appendChild(right);
+    // lantern strings across the top
+    [0, 1].forEach(function (row) {
+      var str = h('div', { class: 'lanternstring s' + row });
+      for (var k = 0; k < 7; k++) { var l = h('span', { class: 'hanglantern', text: cp(0x1F3EE) }); l.style.left = (4 + k * 15 + row * 7) + '%'; l.style.top = (Math.sin((k / 6) * Math.PI) * 18) + 'px'; l.style.animationDelay = (-k * 0.4) + 's'; str.appendChild(l); }
+      sc.appendChild(str);
+    });
     root.appendChild(sc);
     var timer = setInterval(function () {
       if (!document.body.contains(sc)) { clearInterval(timer); return; }
-      if (document.hidden || sc.querySelectorAll('.petal').length > 9) return;
-      var p = h('span', { class: 'mover petal', text: cp(Math.random() < 0.8 ? 0x1F338 : 0x1F343) });
-      p.style.left = (Math.random() * 100) + '%'; p.style.fontSize = (12 + Math.random() * 12) + 'px';
-      p.style.animationDuration = (8 + Math.random() * 6) + 's'; p.style.setProperty('--sway', (Math.random() * 120 - 60) + 'px');
-      p.addEventListener('animationend', function () { p.remove(); });
-      sc.appendChild(p);
-      if (Math.random() < 0.15) { var k = h('span', { class: 'mover koi', text: cp(0x1F41F) }); k.addEventListener('animationend', function () { k.remove(); }); sc.appendChild(k); }
-    }, 900);
+      if (document.hidden) return;
+      if (sc.querySelectorAll('.skylantern').length < 7) {
+        var sl = h('span', { class: 'mover skylantern' }); sl.style.left = (5 + Math.random() * 90) + '%';
+        sl.style.animationDuration = (12 + Math.random() * 8) + 's'; sl.style.setProperty('--sway', (Math.random() * 60 - 30) + 'px');
+        var sz = 10 + Math.random() * 10; sl.style.width = sz + 'px'; sl.style.height = (sz * 1.3) + 'px';
+        sl.addEventListener('animationend', function () { sl.remove(); }); sc.appendChild(sl);
+      }
+      if (Math.random() < 0.18) {
+        var fw = h('i', { class: 'firework' }); fw.style.left = (10 + Math.random() * 80) + '%'; fw.style.top = (6 + Math.random() * 22) + '%';
+        fw.style.setProperty('--c', ['#ffcf3f', '#ff4f6d', '#5fe3ff', '#b46bff', '#3ee08f'][Math.floor(Math.random() * 5)]);
+        fw.addEventListener('animationend', function () { fw.remove(); }); sc.appendChild(fw);
+      }
+      if (Math.random() < 0.04 && !sc.querySelector('.dragonkite')) {
+        var dk = h('span', { class: 'mover dragonkite', text: cp(0x1F409) }); dk.addEventListener('animationend', function () { dk.remove(); }); sc.appendChild(dk);
+      }
+    }, 1000);
     return sc;
   }
 
@@ -240,7 +286,7 @@ var Mahjong = (function () {
         var ps = availablePairs(tiles); if (!ps.length) { stuck(); return; }
         hint = ps[Math.floor(Math.random() * ps.length)]; sel = null; draw();
       }),
-      UI.tbtn('&#128256;', 'Shuffle', function () { if (reshuffle(tiles)) { sel = null; hint = null; undo = []; Sound.play('swap'); save(); draw(); UI.toast('Tiles shuffled'); } }),
+      UI.tbtn('&#128256;', 'Shuffle', doShuffle),
       UI.tbtn('&#127891;', 'How to', function () { location.hash = '#/mahjong/learn'; })]));
 
     var timer = setInterval(function () {
@@ -288,9 +334,18 @@ var Mahjong = (function () {
         }
       });
     }
+    function doShuffle() {
+      if (done) return;
+      var how = reshuffle(tiles);
+      sel = null; hint = null; undo = [];
+      if (!how) { UI.toast('Could not shuffle. Try Undo.'); return; }
+      Sound.play('swap'); save(); draw();
+      UI.toast(how === 'spread' ? 'Tiles spread out so you can finish' : 'Tiles shuffled');
+      if (!availablePairs(tiles).length) setTimeout(stuck, 400);
+    }
     function stuck() {
       UI.modal({ big: '\uD83E\uDD14', title: 'No more matches', text: 'There are no free pairs left. Shuffle the tiles that are still on the board and keep going?',
-        buttons: [{ label: 'Shuffle', cls: 'mahjong', fn: function () { reshuffle(tiles); sel = null; hint = null; save(); draw(); } }, { label: 'Undo last move', fn: function () { var u = undo.pop(); if (u) { u.forEach(function (x) { x.gone = false; }); save(); draw(); } } }] });
+        buttons: [{ label: 'Shuffle', cls: 'mahjong', fn: doShuffle }, { label: 'Undo last move', fn: function () { var u = undo.pop(); if (u) { u.forEach(function (x) { x.gone = false; }); save(); draw(); } } }] });
     }
     function win() {
       done = true; UI.store('mj_game', null);

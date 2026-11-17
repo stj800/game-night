@@ -113,16 +113,22 @@ var Sound = (function () {
 
   // owner = the element of the screen the music belongs to. Only ONE song can ever run.
   var owner = null;
+  var bc = null, myId = Math.random().toString(36).slice(2);
+  try { bc = new BroadcastChannel('gamenight-music'); bc.onmessage = function (e) { if (e.data && e.data.playing && e.data.id !== myId && timer) stopMusic(true); }; } catch (err) {}
+  function announce() { try { if (bc) bc.postMessage({ playing: true, id: myId }); } catch (err) {} }
+  var lastStart = null; // how to resume the current screen's music after Music Off -> On
   function playMusic(name, ownerEl) {
+    lastStart = { fn: playMusic, args: [name, ownerEl], el: ownerEl };
+    if (!prefs.music) { stopMusic(true); return; }
     if (!init()) return;
     var next = SONGS[name] || SONGS.orchard;
     if (ownerEl) owner = ownerEl;
     if (song === next && timer) return;
     stopMusic(); if (ownerEl) owner = ownerEl;
     song = next; step = 0; nextTime = ctx.currentTime + 0.1;
-    timer = setInterval(schedule, 25);
+    timer = setInterval(schedule, 25); announce();
   }
-  function stopMusic() { clearInterval(timer); timer = null; song = null; owner = null; clas = null; }
+  function stopMusic(keepResume) { clearInterval(timer); timer = null; song = null; owner = null; clas = null; if (!keepResume) lastStart = null; }
 
   // ---------- Classical (public-domain pieces from classical.js, played on a soft piano voice) ----------
   var clas = null;
@@ -185,13 +191,15 @@ var Sound = (function () {
   function checkOwner() { if (timer && (!owner || !document.body.contains(owner))) stopMusic(); }
   // list = which playlist (Classical for chess, ChineseMusic for Mahjong)
   function playClassical(ownerEl, onPiece, list) {
+    lastStart = { fn: playClassical, args: [ownerEl, onPiece, list], el: ownerEl };
+    if (!prefs.music) { stopMusic(true); return; }
     list = list || (typeof Classical !== 'undefined' ? Classical : null);
     if (!list || !init()) return;
     if (clas && timer && clas.list === list) { owner = ownerEl; clas.onPiece = onPiece; if (onPiece) onPiece(list[clas.pi]); return; }
     stopMusic(); owner = ownerEl;
     clas = { list: list, pi: Math.floor(Math.random() * list.length), rep: 0, onPiece: onPiece };
     startPiece(ctx.currentTime + 0.25);
-    timer = setInterval(schedClassical, 60);
+    timer = setInterval(schedClassical, 60); announce();
   }
   window.addEventListener('pagehide', function () { stopMusic(); if (ctx) ctx.suspend(); });
 
@@ -253,10 +261,15 @@ var Sound = (function () {
 
   // Music volume 0-1 (remembered). 0.8 matches the original loudness.
   function musicLevel() { var v = prefs.vol === undefined ? 0.8 : prefs.vol; return prefs.music ? 0.28 * v : 0; }
-  function setMusic(on) { prefs.music = on; save(); if (ctx) musicBus.gain.setTargetAtTime(musicLevel(), ctx.currentTime, 0.05); }
+  function setMusic(on) {
+    prefs.music = on; save();
+    if (ctx) { musicBus.gain.cancelScheduledValues(ctx.currentTime); musicBus.gain.setValueAtTime(musicLevel(), ctx.currentTime); }
+    if (!on) stopMusic(true);
+    else if (lastStart && lastStart.el && document.body.contains(lastStart.el)) lastStart.fn.apply(null, lastStart.args);
+  }
   function setVolume(v) { prefs.vol = Math.max(0, Math.min(1, v)); save(); if (ctx) musicBus.gain.setTargetAtTime(musicLevel(), ctx.currentTime, 0.03); }
   function getVolume() { return prefs.vol === undefined ? 0.8 : prefs.vol; }
-  function setSfx(on) { prefs.sfx = on; save(); if (!on && window.speechSynthesis) speechSynthesis.cancel(); if (ctx) sfxBus.gain.setTargetAtTime(on ? 0.55 : 0, ctx.currentTime, 0.05); }
+  function setSfx(on) { prefs.sfx = on; save(); if (ctx) { sfxBus.gain.cancelScheduledValues(ctx.currentTime); sfxBus.gain.setValueAtTime(on ? 0.55 : 0, ctx.currentTime); } if (!on && window.speechSynthesis) speechSynthesis.cancel(); if (ctx) sfxBus.gain.setTargetAtTime(on ? 0.55 : 0, ctx.currentTime, 0.05); }
 
   function state() { return ctx ? { ctx: ctx.state, music: musicBus.gain.value, sfx: sfxBus.gain.value, playing: !!timer } : null; }
   return { init: init, playMusic: playMusic, stopMusic: stopMusic, play: play, prefs: prefs, setMusic: setMusic, setSfx: setSfx, state: state, say: say, setVolume: setVolume, getVolume: getVolume, playClassical: playClassical, checkOwner: checkOwner, unlockVoice: unlockVoice };
