@@ -284,7 +284,7 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 
 /* ===== Fruit Swap: living themed scenes ===== */
 .fsscene { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-#app > *:not(.fsscene):not(.fxlayer) { position: relative; z-index: 1; }
+#app > *:not(.fsscene):not(.fxlayer):not(.rumscene) { position: relative; z-index: 1; }
 .theme-orchard { background:
   radial-gradient(140% 40% at 20% 108%, #4fc35a 0 55%, transparent 56%),
   radial-gradient(140% 38% at 85% 112%, #3aa84a 0 55%, transparent 56%),
@@ -740,3 +740,51 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
   box-shadow: inset 0 -6px 0 rgba(0,0,0,0.25), 0 8px 18px rgba(0,0,0,0.35); transition: opacity 0.12s, transform 0.12s, box-shadow 0.12s; }
 .echopad.lit { opacity: 1; transform: scale(1.06); box-shadow: inset 0 -6px 0 rgba(0,0,0,0.15), 0 0 28px var(--c), 0 0 60px var(--c); }
 .echopad:active { transform: scale(0.96); }
+
+/* Rummy 500 */
+.gamecard.rummy, .bigbtn.rummy { background: linear-gradient(135deg, #0f8a4f 0%, #c9364f 100%); }
+#app > .rumscene { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(900px 700px at 50% 30%, #1f8a55 0%, #0f5a36 55%, #093a23 100%); }
+.rumscene ~ .topbar .iconbtn { background: rgba(0,0,0,0.25); }
+.rumopp { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.rumchip { flex: 1 1 0; min-width: 90px; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 6px 9px; border-left: 4px solid var(--c); font-size: 13px; display: flex; flex-direction: column; }
+.rumchip span { color: #d6f5e3; font-size: 12px; }
+.rumchip.on { background: rgba(255,255,255,0.18); box-shadow: 0 0 0 2px var(--c); }
+.rumscore { width: 100%; text-align: center; font-size: 13px; color: #fff3c4; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rumstatus { min-height: 40px; background: rgba(0,0,0,0.22); border-radius: 12px; padding: 8px 10px; font-size: 14px; margin: 0 0 8px; line-height: 1.35; }
+.rumtable { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; min-height: 70px; max-height: 32vh; overflow-y: auto; padding: 4px 2px; }
+.rumempty { color: #b9e6cc; font-size: 13px; margin: 18px auto; }
+.rummeld { display: flex; padding: 4px 6px 4px 4px; background: rgba(0,0,0,0.18); border-radius: 10px; border-bottom: 3px solid var(--c); }
+.rummeld .pcard + .pcard { margin-left: -20px; }
+.rummeld.can { background: rgba(255,207,63,0.35); box-shadow: 0 0 0 2px #ffcf3f, 0 0 14px rgba(255,207,63,0.8); animation: rumglow 1s ease-in-out infinite alternate; }
+@keyframes rumglow { to { box-shadow: 0 0 0 2px #fff, 0 0 20px rgba(255,207,63,1); } }
+.rumpiles { display: flex; gap: 10px; align-items: center; margin: 10px 0 2px; }
+.rumstock { background: none; padding: 0; flex: none; border-radius: 8px; }
+.rumstock.glow .pcard { box-shadow: 0 0 0 3px #ffcf3f, 0 0 16px rgba(255,207,63,0.9); }
+.rumdisc { flex: 1; display: flex; overflow-x: auto; padding: 6px 4px; min-height: 66px; background: rgba(0,0,0,0.15); border-radius: 10px; }
+.rumdisc .pcard { flex: none; }
+.rumdisc .pcard + .pcard { margin-left: -18px; }
+.rumdisc .pcard.tap:last-child { box-shadow: 0 0 0 3px #ffcf3f; }
+.rumhand { position: relative; margin-top: 4px; }
+.rumhand .pcard { position: absolute; transition: transform 0.15s ease, top 0.2s ease, left 0.2s ease; }
+.rumhand .pcard.sel { transform: translateY(-14px); box-shadow: 0 0 0 3px #3fb4ff, 0 6px 12px rgba(0,0,0,0.4); }
+.rumhand .pcard.fresh { background: #fffbe0; }
+.rumhand .pcard.must { box-shadow: 0 0 0 3px #ff8a3d, 0 6px 12px rgba(0,0,0,0.4); }
+.rumhand .pcard.hint { box-shadow: 0 0 0 3px #3ee08f, 0 6px 12px rgba(0,0,0,0.4); }
+.rumacts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+.rumacts button { padding: 13px 4px; border-radius: 14px; font-weight: 700; font-size: 15px; background: rgba(0,0,0,0.3); }
+.rumacts button:first-child, .rumacts button:nth-child(2) { background: #fff; color: #0f5a36; }
+.rumacts button:disabled { opacity: 0.35; }
+.rumacts button:active { transform: scale(0.96); }
+.pcard { width: 52px; height: 76px; border-radius: 7px; background: #fff; color: #1b1b1b; position: relative; box-shadow: 0 2px 6px rgba(0,0,0,0.35); font-weight: 800; }
+.pcard.red { color: #d0172f; }
+.pcard .pc-tl { position: absolute; top: 3px; left: 5px; font-size: 15px; line-height: 1.02; text-align: center; }
+.pcard .pc-mid { position: absolute; right: 5px; bottom: 2px; font-size: 26px; }
+.pcard.sm { width: 38px; height: 54px; border-radius: 5px; }
+.pcard.sm .pc-tl { font-size: 12px; left: 3px; top: 2px; }
+.pcard.sm .pc-mid { font-size: 17px; right: 3px; bottom: 1px; }
+.pcard.back { background: repeating-linear-gradient(45deg, #b3283f 0 6px, #d8445c 6px 12px); border: 3px solid #fff; color: #fff; }
+.pcard.back .pc-mid { right: 0; left: 0; bottom: 22px; text-align: center; font-size: 16px; text-shadow: 0 1px 3px #000; }
+.rumtbl { width: 100%; border-collapse: collapse; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
+.rumtbl th, .rumtbl td { padding: 6px 4px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 15px; }
+.rumtbl th:first-child, .rumtbl td:first-child { text-align: left; }
+.rumtbl tr.team td { font-weight: 800; color: #ffcf3f; }
