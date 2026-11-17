@@ -878,3 +878,44 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .pithand .pcard.tap { box-shadow: 0 0 0 3px #ffcf3f, 0 6px 12px rgba(0,0,0,0.4); transform: translateY(-8px); }
 .pithand .pcard.dim { filter: brightness(0.6); }
 .pithand .pcard.trump::before { content: 'T'; position: absolute; right: 4px; top: 3px; font-size: 10px; color: #b8860b; }
+
+/* ---------- Card games: size setting (CardPrefs sets --cs for cards, --ts for text) ---------- */
+:root { --cs: 1; --ts: 1; }
+.pcard { width: calc(52px * var(--cs)); height: calc(76px * var(--cs)); border-radius: calc(7px * var(--cs)); }
+.pcard .pc-tl { font-size: calc(15px * var(--cs)); top: calc(3px * var(--cs)); left: calc(5px * var(--cs)); }
+.pcard .pc-mid { font-size: calc(26px * var(--cs)); right: calc(5px * var(--cs)); }
+.pcard.sm { width: calc(38px * var(--cs)); height: calc(54px * var(--cs)); border-radius: calc(5px * var(--cs)); }
+.pcard.sm .pc-tl { font-size: calc(12px * var(--cs)); left: calc(3px * var(--cs)); top: calc(2px * var(--cs)); }
+.pcard.sm .pc-mid { font-size: calc(17px * var(--cs)); right: calc(3px * var(--cs)); }
+.pcard.big { width: calc(58px * var(--cs)); height: calc(84px * var(--cs)); }
+.pcard.big .pc-tl { font-size: calc(17px * var(--cs)); }
+.pcard.big .pc-mid { font-size: calc(30px * var(--cs)); }
+.pcard.back .pc-mid { bottom: calc(22px * var(--cs)); font-size: calc(16px * var(--cs)); left: 0; right: 0; }
+.rummeld .pcard + .pcard, .rummcards .pcard + .pcard { margin-left: calc(-20px * var(--cs)); }
+.rumdisc .pcard + .pcard { margin-left: calc(-18px * var(--cs)); }
+.rumdisc { min-height: calc(66px * var(--cs)); }
+.rumstatus { font-size: calc(14px * var(--ts)); }
+.rumchip { font-size: calc(13px * var(--ts)); min-width: calc(90px * var(--ts)); }
+.rumchip span { font-size: calc(12px * var(--ts)); }
+.rumscore { font-size: calc(13px * var(--ts)); }
+.rumghead { font-size: calc(13px * var(--ts)); }
+.rumghead span { font-size: calc(12px * var(--ts)); }
+.rumlotag { font-size: calc(10px * var(--ts)); max-width: calc(120px * var(--cs)); }
+.rumacts button { font-size: calc(15px * var(--ts)); }
+.rumtbl th, .rumtbl td { font-size: calc(15px * var(--ts)); }
+.rumnet { font-size: calc(12px * var(--ts)); }
+.pittrump { font-size: calc(14px * var(--ts)); }
+.pitseat { font-size: calc(13px * var(--ts)); }
+.pitseat span { font-size: calc(11.5px * var(--ts)); }
+.pitbidbtn { font-size: calc(16px * var(--ts)); min-height: calc(46px * var(--ts)); }
+.pitbidbtn.hint { font-size: calc(14px * var(--ts)); }
+.pitfelt { height: calc(270px * var(--cs)); }
+.pitseat.w, .pitseat.e { top: auto; transform: none; bottom: calc(50% + 30px * var(--cs)); }
+.pittc { margin: calc(-27px * var(--cs)) 0 0 calc(-19px * var(--cs)); }
+.pittc.n { margin-top: calc(-70px * var(--cs)); }
+.pittc.s { margin-top: calc(18px * var(--cs)); }
+.pittc.w { margin-left: calc(-54px * var(--cs)); margin-top: calc(-24px * var(--cs)); }
+.pittc.e { margin-left: calc(16px * var(--cs)); margin-top: calc(-24px * var(--cs)); }
+.pithand .pcard.trump::before { font-size: calc(10px * var(--cs)); }
+.cardprefs { gap: 10px; }
+.pitseat.w, .pitseat.e { max-width: 36%; }

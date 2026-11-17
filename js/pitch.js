@@ -44,7 +44,7 @@ var Pitch = (function () {
   function bidWord(v) { return v ? 'bid ' + v : 'passed'; }
   function commit(msg) {
     D.msg = msg; save(); publish();
-    var d = D; setTimeout(function () { if (d === D) runBots(); }, 1000);
+    var d = D; setTimeout(function () { if (d === D) runBots(); }, CardPrefs.ms(1000));
   }
   function afterPlay(seat, c) {
     var s = D.s, who = pname(seat), msg = who + ' played the ' + E.label(c) + '.';
@@ -92,7 +92,7 @@ var Pitch = (function () {
       d.busy = false;
       if (s.phase === 'bid') apply(seat, 'bid', E.aiBid(s));
       else apply(seat, 'card', E.aiPlay(s));
-    }, s.phase === 'bid' ? 500 : 350);
+    }, CardPrefs.ms(s.phase === 'bid' ? 500 : 350));
   }
 
   // =================== Network (PeerJS) ===================
@@ -412,6 +412,8 @@ var Pitch = (function () {
       ]),
       UI.store('pit_net') && !(N.role === 'host' && D) ? h('button', { class: 'ghostbtn', text: 'Reopen my last online table', onclick: function () { hostResume(); location.hash = '#/pitch/online'; } }) : null
     ]));
+    root.appendChild(h('h3', { class: 'rumsub', text: 'Size and speed' }));
+    root.appendChild(CardPrefs.panel());
     root.appendChild(h('div', { class: 'rules', html:
       '<h3>The goal</h3><p>Also called <b>Pitch</b>. Each hand there are 4 points up for grabs. First side to the target score wins.</p>' +
       '<h3>The deal and the bid</h3><p>Everyone gets 6 cards. Going around once, each player bids <b>2, 3 or 4</b> (how many of the 4 points they think they can win) or passes. You have to beat the last bid. If everyone passes, the dealer is stuck with 2.</p>' +
@@ -544,7 +546,7 @@ var Pitch = (function () {
   function table(root, src) {
     var scene = h('div', { class: 'rumscene' }); root.appendChild(scene);
     root.appendChild(UI.topbar('High-Low Jack', src.back, h('div', { class: 'rumtopbtns' }, [
-      h('button', { class: 'iconbtn', html: '&#127926;', 'aria-label': 'Music and sound', onclick: soundPanel }),
+      h('button', { class: 'iconbtn', html: '&#9881;&#65039;', 'aria-label': 'Settings: size, speed and sound', onclick: soundPanel }),
       h('button', { class: 'iconbtn', html: '&#128202;', 'aria-label': 'Scores', onclick: scoreSheet })])));
     var netEl = h('div', { class: 'rumnet' }), board = h('div', { class: 'pitboard' });
     var status = h('div', { class: 'status rumstatus' }), felt = h('div', { class: 'pitfelt' });
@@ -616,8 +618,7 @@ var Pitch = (function () {
           felt.appendChild(el);
         }
       });
-      if (faded) felt.appendChild(h('div', { class: 'pittook', text: (s.lastTrick.w === mySeat ? 'You' : s.players[s.lastTrick.w].name) + ' took trick ' + s.lastTrick.n }));
-      // bid buttons
+            // bid buttons
       bidBar.innerHTML = '';
       if (s.phase === 'bid' && myTurn()) {
         if (E.canPass(s, mySeat)) bidBar.appendChild(h('button', { class: 'pitbidbtn pass', text: 'Pass', onclick: function () { Sound.play('pop', 1); src.act('bid', 0); } }));
@@ -638,9 +639,9 @@ var Pitch = (function () {
         var ta = s.trump !== null && E.suit(a) === s.trump, tb = s.trump !== null && E.suit(b) === s.trump;
         return (tb - ta) || E.suit(a) - E.suit(b) || E.power(b) - E.power(a);
       });
-      var W = handEl.clientWidth || 340, CW = 58, n = cards.length;
+      var cs = CardPrefs.size(), W = handEl.clientWidth || 340, CW = 58 * cs, n = cards.length;
       var step = n > 1 ? Math.min(CW + 6, (W - CW) / (n - 1)) : 0, left0 = Math.max(0, (W - (CW + step * (n - 1))) / 2);
-      handEl.style.height = '104px';
+      handEl.style.height = Math.round(84 * cs + 22) + 'px';
       cards.forEach(function (c, k) {
         var playable = legal.indexOf(c) >= 0;
         var el = cardEl(c, 'big' + (playable ? ' tap' : '') + (myTurn() && s.phase === 'play' && !playable ? ' dim' : '') + (s.trump !== null && E.suit(c) === s.trump ? ' trump' : ''));
@@ -657,7 +658,7 @@ var Pitch = (function () {
       animate(s);
       if (s.phase === 'over' || s.phase === 'gameover') {
         var key = s.round + s.phase + (s.gid || '');
-        if (key !== shownKey) { shownKey = key; setTimeout(roundOver, 1300); }
+        if (key !== shownKey) { shownKey = key; setTimeout(roundOver, CardPrefs.ms(1300)); }
       } else if (shownKey && document.querySelector('.pitroundmodal')) { UI.closeModal(); shownKey = ''; }
     }
 
@@ -676,8 +677,8 @@ var Pitch = (function () {
           { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(.7) rotate(-25deg)', opacity: 0.4 },
           { offset: 0.8, transform: 'translate(0,-6px) scale(1.08) rotate(4deg)', opacity: 1 },
           { transform: 'translate(0,0) scale(1) rotate(0deg)', opacity: 1 }
-        ], { duration: 420, delay: k * 120, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'backwards' });
-        setTimeout(function () { Sound.play('slap'); }, 380 + k * 120);
+        ], { duration: CardPrefs.ms(420), delay: CardPrefs.ms(k * 120), easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'backwards' });
+        setTimeout(function () { Sound.play('slap'); }, CardPrefs.ms(380 + k * 120));
       });
     }
 
@@ -749,7 +750,7 @@ var Pitch = (function () {
     }
 
     function soundPanel() {
-      var body = h('div', { class: 'rumsound' });
+      var body = h('div', { class: 'rumsound' }, CardPrefs.rows(function () { render(); }));
       function row(label, note, on, setOn, vol, setVol) {
         var r = h('div', { class: 'rumsrow' }, [h('div', { class: 'rumslabel' }, [h('b', { text: label }), h('span', { text: note })]),
           UI.seg([{ value: true, label: 'On' }, { value: false, label: 'Off' }], on, function (v) { setOn(v); })]);
@@ -762,7 +763,7 @@ var Pitch = (function () {
       }
       body.appendChild(row('Music', 'Vegas lounge band', Sound.prefs.music, Sound.setMusic, Sound.getVolume(), Sound.setVolume));
       body.appendChild(row('Card sounds', 'Flicks, slaps and chips', Sound.prefs.sfx, Sound.setSfx));
-      UI.modal({ title: 'Music and sound', body: body, buttons: [{ label: 'Done', cls: 'pitch' }] });
+      UI.modal({ title: 'Settings', body: body, buttons: [{ label: 'Done', cls: 'pitch' }] });
     }
     function startAudio() { Sound.playMusic('lounge', scene); }
     startAudio();

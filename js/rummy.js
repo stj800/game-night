@@ -48,7 +48,7 @@ var Rummy = (function () {
   function commit(msg) {
     if (D.s.phase === 'over' || D.s.phase === 'gameover') msg += ' ' + roundHead(D.s);
     D.msg = msg; save(); publish();
-    var d = D; setTimeout(function () { if (d === D) runBots(); }, 1100);
+    var d = D; setTimeout(function () { if (d === D) runBots(); }, CardPrefs.ms(1100));
   }
   // Apply a move for a seat. Returns an error message, or null when it worked.
   function apply(seat, a, x) {
@@ -106,8 +106,8 @@ var Rummy = (function () {
         });
         d.busy = false;
         commit(who + ' ' + (lines.join(', ') || 'played') + '.');
-      }, 900);
-    }, 800);
+      }, CardPrefs.ms(900));
+    }, CardPrefs.ms(800));
   }
 
   // =================== Network (PeerJS) ===================
@@ -454,6 +454,8 @@ var Rummy = (function () {
       ]),
       UI.store('rum_net') && !(N.role === 'host' && D) ? h('button', { class: 'ghostbtn', text: 'Reopen my last online table', onclick: function () { hostResume(); location.hash = '#/rummy/online'; } }) : null
     ]));
+    root.appendChild(h('h3', { class: 'rumsub', text: 'Size and speed' }));
+    root.appendChild(CardPrefs.panel());
     root.appendChild(h('div', { class: 'rules', html:
       '<h3>The goal</h3><p>Score points by laying cards on the table in <b>melds</b>. First to the target score wins.</p>' +
       '<h3>Melds</h3><ul><li><b>Set:</b> 3 or 4 cards of the same rank (7 7 7).</li><li><b>Run:</b> 3 or more in a row, same suit (4 5 6 of hearts). Aces go low (A 2 3) or high (Q K A), not around the corner.</li></ul>' +
@@ -593,7 +595,7 @@ var Rummy = (function () {
   function table(root, src) {
     var scene = h('div', { class: 'rumscene' }); root.appendChild(scene);
     root.appendChild(UI.topbar('Rummy 500', src.back, h('div', { class: 'rumtopbtns' }, [
-      h('button', { class: 'iconbtn', html: '&#127926;', 'aria-label': 'Music and sound', onclick: soundPanel }),
+      h('button', { class: 'iconbtn', html: '&#9881;&#65039;', 'aria-label': 'Settings: size, speed and sound', onclick: soundPanel }),
       h('button', { class: 'iconbtn', html: '&#128202;', 'aria-label': 'Scores', onclick: scoreSheet })])));
     var netEl = h('div', { class: 'rumnet' });
     var opp = h('div', { class: 'rumopp' }), status = h('div', { class: 'status rumstatus' }), tbl = h('div', { class: 'rumtable' });
@@ -640,7 +642,7 @@ var Rummy = (function () {
       return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: w || el.offsetWidth || r.width };
     }
     function snap() {
-      var b = { hand: {}, disc: {}, chip: {}, stock: rectOf(stockEl.firstChild), handBox: rectOf(handEl, 52) };
+      var b = { hand: {}, disc: {}, chip: {}, stock: rectOf(stockEl.firstChild), handBox: rectOf(handEl, 52 * CardPrefs.size()) };
       Array.prototype.forEach.call(handEl.querySelectorAll('.pcard'), function (el) { b.hand[el.getAttribute('data-c')] = rectOf(el); });
       Array.prototype.forEach.call(discEl.querySelectorAll('.pcard'), function (el) { b.disc[el.getAttribute('data-c')] = rectOf(el); });
       Array.prototype.forEach.call(opp.querySelectorAll('.rumchip'), function (el) { b.chip[el.getAttribute('data-seat')] = rectOf(el, 24); });
@@ -663,6 +665,7 @@ var Rummy = (function () {
       document.body.appendChild(g);
       el.style.visibility = 'hidden';
       var dx = from.x - to.x, dy = from.y - to.y, sc = from.w && w ? from.w / w : 1, tilt = o.tilt || 0, frames;
+      o = { kind: o.kind, tilt: o.tilt, land: o.land, dur: CardPrefs.ms(o.dur), delay: CardPrefs.ms(o.delay || 0) };
       if (o.kind === 'throw') frames = [
         { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + sc + ') rotate(0deg)' },
         { offset: 0.5, transform: 'translate(' + dx * 0.45 + 'px,' + (dy * 0.45 - 80) + 'px) scale(1.3) rotate(220deg)' },
@@ -688,8 +691,9 @@ var Rummy = (function () {
     }
     function ghost(el, from, to, dur, delay) {
       if (calm || !from || !to || !el.animate) return;
+      dur = CardPrefs.ms(dur); delay = CardPrefs.ms(delay || 0);
       el.classList.add('flying');
-      el.style.cssText = 'position:fixed;margin:0;left:' + (to.x - 19) + 'px;top:' + (to.y - 27) + 'px;z-index:3000;pointer-events:none;';
+      el.style.cssText = 'position:fixed;margin:0;left:' + (to.x - 19 * CardPrefs.size()) + 'px;top:' + (to.y - 27 * CardPrefs.size()) + 'px;z-index:3000;pointer-events:none;';
       document.body.appendChild(el);
       var a = el.animate([
         { transform: 'translate(' + (from.x - to.x) + 'px,' + (from.y - to.y) + 'px) scale(1)', opacity: 1 },
@@ -704,7 +708,7 @@ var Rummy = (function () {
         var who = (s.dealer + 1 + j) % n, d = idx++ * 55;
         if (who === mySeat) flyTo(cards[k], b.stock, { dur: 380, delay: d });
         else if (k < s.players[who].hand.length) ghost(back(), b.stock, b.chip[who], 360, d);
-        if (idx % 3 === 1) setTimeout(function () { Sound.play('flick'); }, d);
+        if (idx % 3 === 1) setTimeout(function () { Sound.play('flick'); }, CardPrefs.ms(d));
       }
     }
     function animate(b, s) {
@@ -737,7 +741,7 @@ var Rummy = (function () {
         var from = who === mySeat ? (b.hand[c] || b.handBox) : b.chip[who];
         flyTo(tbl.querySelector('.pcard[data-c="' + c + '"]'), from, { dur: 460, delay: k * 50 });
       });
-      if (newOnTable.length) { delay = 220 + newOnTable.length * 50; if (actor !== mySeat) setTimeout(function () { Sound.play('chips'); }, 200); }
+      if (newOnTable.length) { delay = 220 + newOnTable.length * 50; if (actor !== mySeat) setTimeout(function () { Sound.play('chips'); }, CardPrefs.ms(200)); }
       var top = s.discard[s.discard.length - 1];
       if (top !== undefined && p.disc.indexOf(top) < 0) {
         var from = actor === mySeat ? (b.hand[top] || b.handBox) : actorFrom;
@@ -839,14 +843,19 @@ var Rummy = (function () {
       discEl.scrollLeft = discEl.scrollWidth;
       // hand
       handEl.innerHTML = '';
-      var cards = sorted(my.hand), W = handEl.clientWidth || 340, CW = 52, n = cards.length;
-      var rows = n > 14 ? 2 : 1, perRow = Math.ceil(n / rows);
-      var step = perRow > 1 ? Math.min(CW + 4, (W - CW) / (perRow - 1)) : 0;
-      handEl.style.height = (rows * 84 + 18) + 'px';
+      var cs = CardPrefs.size(), cards = sorted(my.hand), W = handEl.clientWidth || 340, CW = 52 * cs, RH = 84 * cs, n = cards.length;
+      var rows = 1, perRow = n, step = 0;
+      for (;;) {
+        perRow = Math.ceil(n / rows);
+        step = perRow > 1 ? Math.min(CW + 4, (W - CW) / (perRow - 1)) : 0;
+        if (step >= 24 * cs || perRow <= 1 || rows >= 4) break;
+        rows++;
+      }
+      handEl.style.height = (rows * RH + 18) + 'px';
       cards.forEach(function (c, k) {
         var row = Math.floor(k / perRow), col = k % perRow;
         var el = cardEl(c, (sel.indexOf(c) >= 0 ? 'sel ' : '') + (fresh[c] ? 'fresh ' : '') + (c === s.mustUse && myTurn() ? 'must ' : '') + (hint.indexOf(c) >= 0 ? 'hint' : ''));
-        el.style.left = (col * step) + 'px'; el.style.top = (row * 84 + 14) + 'px'; el.style.zIndex = k + 1;
+        el.style.left = (col * step) + 'px'; el.style.top = (row * RH + 14) + 'px'; el.style.zIndex = k + 1;
         el.addEventListener('click', function () {
           if (!myTurn()) { UI.toast('Wait for your turn.'); return; }
           if (S().phase === 'draw') { UI.toast('Draw first: tap the deck or the discard pile.'); return; }
@@ -865,7 +874,7 @@ var Rummy = (function () {
       // end of hand / game
       if (s.phase === 'over' || s.phase === 'gameover') {
         var key = s.round + s.phase + (s.gid || '');
-        if (key !== shownKey) { shownKey = key; setTimeout(roundOver, 700); }
+        if (key !== shownKey) { shownKey = key; setTimeout(roundOver, CardPrefs.ms(700)); }
       } else if (shownKey && document.querySelector('.rumroundmodal')) { UI.closeModal(); shownKey = ''; }
     }
 
@@ -951,7 +960,7 @@ var Rummy = (function () {
     }
 
     function soundPanel() {
-      var body = h('div', { class: 'rumsound' });
+      var body = h('div', { class: 'rumsound' }, CardPrefs.rows(function () { render(); }));
       function row(label, note, on, setOn, vol, setVol) {
         var r = h('div', { class: 'rumsrow' }, [h('div', { class: 'rumslabel' }, [h('b', { text: label }), h('span', { text: note })]),
           UI.seg([{ value: true, label: 'On' }, { value: false, label: 'Off' }], on, function (v) { setOn(v); })]);
@@ -964,7 +973,7 @@ var Rummy = (function () {
       }
       body.appendChild(row('Music', 'Vegas lounge band', Sound.prefs.music, Sound.setMusic, Sound.getVolume(), Sound.setVolume));
       body.appendChild(row('Card sounds', 'Shuffles, flicks and slaps', Sound.prefs.sfx, Sound.setSfx));
-      UI.modal({ title: 'Music and sound', body: body, buttons: [{ label: 'Done', cls: 'rummy' }] });
+      UI.modal({ title: 'Settings', body: body, buttons: [{ label: 'Done', cls: 'rummy' }] });
     }
     function startAudio() { Sound.playMusic('lounge', scene); }
     startAudio();
