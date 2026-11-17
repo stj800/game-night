@@ -1,5 +1,5 @@
 /* Offline cache. Bump VERSION on every deploy. */
-var VERSION = 'gn-v19';
+var VERSION = 'gn-v20';
 var FILES = ['./', 'index.html', 'styles.css', 'manifest.json', 'icon-180.png', 'icon-512.png',
   'js/ui.js', 'js/audio.js', 'js/classical.js', 'js/chess-engine.js', 'js/chess.js', 'js/checkers.js', 'js/sudoku.js', 'js/blocks.js', 'js/mahjong.js', 'js/swap-engine.js', 'js/swap.js', 'js/app.js'];
 self.addEventListener('install', function (e) {
@@ -13,7 +13,9 @@ self.addEventListener('activate', function (e) {
 // Network first so updates show up right away; fall back to the cache offline.
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
-  e.respondWith(fetch(e.request).then(function (r) {
+  // Always ask the server for the newest copy (no-cache revalidates instead of using a stale HTTP cache)
+  var fresh = new URL(e.request.url).origin === self.location.origin ? fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' }) : fetch(e.request);
+  e.respondWith(fresh.then(function (r) {
     var copy = r.clone();
     caches.open(VERSION).then(function (c) { c.put(e.request, copy); });
     return r;
