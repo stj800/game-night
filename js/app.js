@@ -50,6 +50,7 @@
 
   function route() {
     UI.closeModal();
+    if (window.Sound) Sound.stopMusic();
     var path = location.hash.replace(/^#\/?/, '');
     var fn = routes[path] || home;
     app.innerHTML = '';

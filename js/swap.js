@@ -9,6 +9,15 @@ var Swap = (function () {
     { value: 3, label: 'Advanced', kinds: 6, moves: 20, target: 10000, note: '6 kinds of fruit and only 20 moves. Score 10,000 points to win.' }
   ];
 
+  var THEMES = {
+    1: { key: 'orchard', name: 'Sunny Orchard', song: 'orchard', floaters: [0x1F98B, 0x1F33C, 0x1F338, 0x1F353, 0x1F34F, 0x1FAE7], decor: [0x2601, 0x2601, 0x1F333, 0x1F333] },
+    2: { key: 'tropical', name: 'Tropical Sunset', song: 'tropical', floaters: [0x1FAE7, 0x1F33A, 0x1F34A, 0x1F34B, 0x2728, 0x1F41A], decor: [0x1F334, 0x1F334, 0x2600] },
+    3: { key: 'night', name: 'Berry Night', song: 'night', floaters: [0x2728, 0x2B50, 0x1F347, 0x1FAD0, 0x1F4AB, 0x2728], decor: [0x1F319] }
+  };
+  var PARTICLE = ['#ff3b5c', '#ffd23f', '#9b5de5', '#ff8c1a', '#4361ee', '#5fd35f'];
+  var CHEERS = ['Juicy!', 'Fresh!', 'Ripe!', 'Fruitastic!', 'Berry good!', 'Smoothie time!'];
+  function cp(c) { return String.fromCodePoint(c); }
+
   // ---------- pure game logic ----------
   function rnd(k) { return Math.floor(Math.random() * k); }
   function fresh(kinds) {
@@ -146,8 +155,62 @@ var Swap = (function () {
 
   function play(root) {
     var cfg = UI.store('fs_cfg') || { level: 1 }, L = LEVELS[cfg.level - 1];
-    root.appendChild(UI.topbar('Fruit Swap', '#/swap'));
+    var TH = THEMES[cfg.level] || THEMES[1];
+    var musicBtn = h('button', { class: 'iconbtn', 'aria-label': 'Music on or off' }), sfxBtn = h('button', { class: 'iconbtn', 'aria-label': 'Sound on or off' });
+    function paintToggles() {
+      musicBtn.innerHTML = Sound.prefs.music ? '&#127925;' : '<s>&#127925;</s>'; musicBtn.style.opacity = Sound.prefs.music ? 1 : 0.5;
+      sfxBtn.innerHTML = Sound.prefs.sfx ? '&#128266;' : '&#128263;';
+    }
+    musicBtn.addEventListener('click', function () { Sound.setMusic(!Sound.prefs.music); Sound.playMusic(TH.song); paintToggles(); });
+    sfxBtn.addEventListener('click', function () { Sound.setSfx(!Sound.prefs.sfx); paintToggles(); });
+    paintToggles();
+    var scene = h('div', { class: 'fsscene theme-' + TH.key });
+    TH.decor.forEach(function (c, k) { scene.appendChild(h('span', { class: 'decor d' + k, text: cp(c) })); });
+    if (TH.key === 'night') for (var st = 0; st < 40; st++) { var dot = h('i', { class: 'twinkle' }); dot.style.left = Math.random() * 100 + '%'; dot.style.top = Math.random() * 70 + '%'; dot.style.animationDelay = Math.random() * 3 + 's'; scene.appendChild(dot); }
+    root.appendChild(scene);
+    var fx = h('div', { class: 'fxlayer' });
+    root.appendChild(fx);
+    root.appendChild(UI.topbar('Fruit Swap', '#/swap', h('div', { class: 'fstoggles' }, [musicBtn, sfxBtn])));
     var bar = h('div', { class: 'fsbar' }), meter = h('div', { class: 'fsmeter' }, h('i')), gridEl = h('div', { class: 'fsgrid' });
+    // Background life: things drift up the screen all the time
+    var floatTimer = setInterval(function () {
+      if (!document.body.contains(scene)) { clearInterval(floatTimer); Sound.stopMusic(); return; }
+      if (document.hidden) return;
+      var e = h('span', { class: 'floater', text: cp(TH.floaters[Math.floor(Math.random() * TH.floaters.length)]) });
+      e.style.left = (Math.random() * 96) + '%';
+      e.style.fontSize = (16 + Math.random() * 26) + 'px';
+      e.style.animationDuration = (7 + Math.random() * 7) + 's';
+      e.style.setProperty('--sway', (Math.random() * 60 - 30) + 'px');
+      e.addEventListener('animationend', function () { e.remove(); });
+      scene.appendChild(e);
+    }, 650);
+    // Browsers only allow sound after a tap, so music starts on the first touch.
+    root.addEventListener('pointerdown', function () { Sound.playMusic(TH.song); }, { once: true });
+    Sound.playMusic(TH.song);
+    function fxText(text, cls, x, y) {
+      var e = h('div', { class: cls, text: text });
+      if (x !== undefined) { e.style.left = x + 'px'; e.style.top = y + 'px'; }
+      e.addEventListener('animationend', function () { e.remove(); });
+      fx.appendChild(e);
+    }
+    function burst(cells, combo) {
+      var sx = 0, sy = 0;
+      cells.forEach(function (p) {
+        var r = tiles[p[0] * N + p[1]].getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        sx += cx; sy += cy;
+        var color = PARTICLE[p.was && p.was.t >= 0 ? p.was.t : Math.floor(Math.random() * 6)];
+        for (var k = 0; k < 7; k++) {
+          var d = h('i', { class: 'particle' }), ang = Math.random() * Math.PI * 2, dist = 30 + Math.random() * 55;
+          d.style.left = cx + 'px'; d.style.top = cy + 'px'; d.style.background = color;
+          d.style.setProperty('--dx', Math.cos(ang) * dist + 'px'); d.style.setProperty('--dy', Math.sin(ang) * dist + 'px');
+          var size = 5 + Math.random() * 7; d.style.width = d.style.height = size + 'px';
+          d.addEventListener('animationend', function () { this.remove(); });
+          fx.appendChild(d);
+        }
+      });
+      if (cells.length) fxText('+' + (cells.length * 60 * combo), 'scorefloat', sx / cells.length, sy / cells.length);
+    }
+    function shake(big) { gridEl.classList.remove('shake', 'shakebig'); void gridEl.offsetWidth; gridEl.classList.add(big ? 'shakebig' : 'shake'); }
     root.appendChild(bar); root.appendChild(meter); root.appendChild(gridEl);
     root.appendChild(h('div', { class: 'toolbar two' }, [
       UI.tbtn('&#128161;', 'Show a move', function () { showHint(true); }),
@@ -237,13 +300,16 @@ var Swap = (function () {
         } else res = starBlast(g, star, other);
         score += res.points; moves--; UI.vibrate(40);
         render(null, res.cleared);
-        await wait(POP_MS);
+        Sound.play('special'); fxText('Fruit storm!', 'cheer');
+        await wait(POP_MS * 0.72);
+        Sound.play('blast'); burst(res.cleared, 2); shake(true);
+        await wait(POP_MS * 0.28);
         render(gravity(g, L.kinds));
         await wait(FALL_MS);
         await cascade(null, 2);
       } else {
-        swapCells(g, a, b); render();
-        if (!runs(g).length) {
+        swapCells(g, a, b); render(); Sound.play('swap');
+        if (!runs(g).length) { Sound.play('nope');
           await wait(160); swapCells(g, a, b); render();
           [a, b].forEach(function (p) { tiles[p[0] * N + p[1]].classList.add('nope'); });
           UI.vibrate([10, 30, 10]);
@@ -261,11 +327,18 @@ var Swap = (function () {
         var step = clearStep(g, focus, combo);
         if (!step) break;
         score += step.points;
-        if (combo >= 3) UI.toast(combo >= 5 ? 'Fruit frenzy! x' + combo : 'Combo x' + combo);
         UI.vibrate(combo > 1 ? 20 : 10);
-        render(null, step.cleared.filter(function (p) { return !g[p[0]][p[1]]; }));
-        await wait(POP_MS);
+        var gone = step.cleared.filter(function (p) { return !g[p[0]][p[1]]; });
+        render(null, gone);
+        Sound.play('grow', combo);
+        if (step.created.length) Sound.play('special');
+        if (combo >= 2) { fxText(CHEERS[Math.min(combo - 2, CHEERS.length - 1)] + (combo >= 3 ? ' x' + combo : ''), 'cheer'); Sound.play('combo', combo); }
+        await wait(POP_MS * 0.72);
+        Sound.play('pop', combo); burst(gone, combo);
+        if (combo >= 3 || gone.length >= 6) shake(combo >= 4 || gone.length >= 10);
+        await wait(POP_MS * 0.28);
         render(gravity(g, L.kinds));
+        setTimeout(function () { Sound.play('land'); }, FALL_MS * 0.55);
         await wait(FALL_MS);
         focus = null; combo++;
       }
@@ -279,7 +352,7 @@ var Swap = (function () {
       var bests = UI.store('fs_best') || {};
       var isBest = !bests[cfg.level] || score > bests[cfg.level];
       if (isBest) { bests[cfg.level] = score; UI.store('fs_best', bests); }
-      if (won) UI.confetti();
+      if (won) { UI.confetti(); Sound.play('win'); } else Sound.play('lose');
       var stars = won ? (moves >= L.moves * 0.3 ? 3 : moves >= L.moves * 0.1 ? 2 : 1) : 0;
       UI.modal({ big: won ? '\u2B50'.repeat(stars) : '\uD83C\uDF4B',
         title: won ? 'You win!' : 'Out of moves',
@@ -291,6 +364,7 @@ var Swap = (function () {
       g = fresh(L.kinds); score = 0; moves = L.moves; busy = false; sel = null; done = false;
       var all = []; for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) all.push({ r: r, c: c, d: N });
       render(all); resetHint();
+      fxText('Level ' + cfg.level + ': ' + TH.name, 'banner');
     }
     start();
   }

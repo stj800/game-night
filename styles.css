@@ -281,3 +281,79 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .fstile.sp-row { --ang: 0deg; } .fstile.sp-col { --ang: 90deg; }
 .fstile.sp-star { background: radial-gradient(circle, rgba(255,207,63,0.6), rgba(255,79,154,0.25)); animation: fsglow 1.4s infinite; }
 @keyframes fsglow { 50% { box-shadow: 0 0 14px rgba(255,207,63,0.8); } }
+
+/* ===== Fruit Swap: living themed scenes ===== */
+.fsscene { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+#app > *:not(.fsscene):not(.fxlayer) { position: relative; z-index: 1; }
+.theme-orchard { background:
+  radial-gradient(140% 40% at 20% 108%, #4fc35a 0 55%, transparent 56%),
+  radial-gradient(140% 38% at 85% 112%, #3aa84a 0 55%, transparent 56%),
+  linear-gradient(180deg, #4fb8ff 0%, #8fd8ff 45%, #d4f4ff 75%); }
+.theme-tropical { background:
+  radial-gradient(60% 18% at 50% 104%, #1d9bb5 0 60%, transparent 61%),
+  radial-gradient(30% 16% at 70% 30%, rgba(255,226,120,0.9) 0 40%, transparent 70%),
+  linear-gradient(180deg, #5b2a86 0%, #c2416b 38%, #ff7a59 62%, #ffc069 82%, #2bb3c9 100%); }
+.theme-night { background:
+  radial-gradient(120% 30% at 50% 115%, #1c0f4a 0 60%, transparent 61%),
+  linear-gradient(180deg, #07041f 0%, #1a0b4d 50%, #3a1670 100%); }
+.decor { position: absolute; line-height: 1; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.25)); }
+.theme-orchard .d0 { top: 9%; font-size: 70px; animation: drift 38s linear infinite; }
+.theme-orchard .d1 { top: 22%; font-size: 48px; animation: drift 52s linear infinite; animation-delay: -20s; opacity: 0.85; }
+.theme-orchard .d2 { bottom: 3%; left: -12px; font-size: 90px; }
+.theme-orchard .d3 { bottom: 5%; right: -14px; font-size: 76px; }
+.theme-tropical .d0 { bottom: 2%; left: -16px; font-size: 100px; transform-origin: bottom center; animation: sway 4s ease-in-out infinite; }
+.theme-tropical .d1 { bottom: 4%; right: -18px; font-size: 84px; transform-origin: bottom center; animation: sway 5s ease-in-out infinite reverse; }
+.theme-tropical .d2 { top: 20%; right: 12%; font-size: 70px; opacity: 0.9; animation: glowpulse 4s ease-in-out infinite; }
+.theme-night .d0 { top: 7%; right: 8%; font-size: 64px; animation: glowpulse 5s ease-in-out infinite; }
+.twinkle { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff; animation: twinkle 2.4s ease-in-out infinite; }
+@keyframes drift { from { left: -90px; } to { left: 110%; } }
+@keyframes sway { 50% { transform: rotate(5deg); } }
+@keyframes glowpulse { 50% { filter: drop-shadow(0 0 22px rgba(255,230,140,0.95)); transform: scale(1.06); } }
+@keyframes twinkle { 50% { opacity: 0.15; transform: scale(0.5); } }
+.floater { position: absolute; bottom: -50px; opacity: 0; animation: floatup linear forwards; }
+@keyframes floatup {
+  0% { transform: translate(0, 0) rotate(0); opacity: 0; }
+  10% { opacity: 0.85; }
+  50% { transform: translate(var(--sway), -55vh) rotate(20deg); }
+  90% { opacity: 0.7; }
+  100% { transform: translate(0, -115vh) rotate(-10deg); opacity: 0; }
+}
+/* Keep the game readable on bright scenes */
+.fsscene ~ .topbar h1 { text-shadow: 0 2px 6px rgba(0,0,0,0.45); }
+.fsscene ~ .topbar .iconbtn, .fsscene ~ .toolbar button { background: rgba(27,20,70,0.6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.fsscene ~ .fsbar { background: rgba(27,20,70,0.6); border-radius: 16px; padding: 8px 0; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.fsscene ~ .fsgrid { background: rgba(27,20,70,0.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); box-shadow: 0 16px 40px rgba(0,0,0,0.35), inset 0 0 0 2px rgba(255,255,255,0.15); }
+.fstoggles { display: flex; gap: 8px; }
+
+/* ===== Effects layer ===== */
+.fxlayer { position: fixed; inset: 0; z-index: 40; pointer-events: none; overflow: hidden; }
+.particle { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); animation: particle 0.7s cubic-bezier(.2,.7,.4,1) forwards; box-shadow: 0 0 6px rgba(255,255,255,0.6); }
+@keyframes particle { to { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.2); opacity: 0; } }
+.scorefloat {
+  position: absolute; transform: translate(-50%, -50%); font-size: 24px; font-weight: 900; color: #fff;
+  -webkit-text-stroke: 1.5px #7a1f5c; text-shadow: 0 3px 0 #7a1f5c; animation: scorefloat 1s ease-out forwards;
+}
+@keyframes scorefloat { 0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; } 20% { transform: translate(-50%, -60%) scale(1.25); opacity: 1; } 100% { transform: translate(-50%, -190%) scale(1); opacity: 0; } }
+.cheer, .banner {
+  position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); white-space: nowrap; font-weight: 900;
+  background: linear-gradient(180deg, #fff6a8, #ffcf3f 45%, #ff7a2f); -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-stroke: 2px #6b1a4f; filter: drop-shadow(0 5px 0 #6b1a4f) drop-shadow(0 10px 18px rgba(0,0,0,0.35));
+}
+.cheer { font-size: min(50px, 10.5vw); animation: cheer 1.2s cubic-bezier(.2,1.6,.4,1) forwards; }
+@keyframes cheer {
+  0% { transform: translate(-50%, -50%) scale(0) rotate(-12deg); opacity: 0; }
+  25% { transform: translate(-50%, -50%) scale(1.15) rotate(3deg); opacity: 1; }
+  40% { transform: translate(-50%, -50%) scale(1) rotate(0); }
+  80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -80%) scale(0.9); opacity: 0; }
+}
+.banner { font-size: 30px; top: 46%; animation: banner 2.4s ease-in-out forwards; }
+@keyframes banner {
+  0% { transform: translate(-160%, -50%); opacity: 0; } 18% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+  28% { transform: translate(-50%, -50%) scale(1); } 80% { transform: translate(-50%, -50%); opacity: 1; }
+  100% { transform: translate(60%, -50%); opacity: 0; }
+}
+.fsgrid.shake { animation: shake 0.35s; }
+.fsgrid.shakebig { animation: shake 0.55s 1.4; }
+@keyframes shake { 20% { transform: translate(-4px, 2px) rotate(-0.6deg); } 40% { transform: translate(4px, -2px) rotate(0.6deg); } 60% { transform: translate(-3px, 1px); } 80% { transform: translate(2px, -1px); } }
+@media (prefers-reduced-motion: reduce) { .floater, .decor, .twinkle { animation: none !important; } }
